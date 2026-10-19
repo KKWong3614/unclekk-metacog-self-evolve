@@ -1,0 +1,429 @@
+{
+  "domain": "paper_review",
+  "start_time": "2026-09-08T12:28:28.866582",
+  "end_time": "2026-09-08T12:28:28.973602",
+  "duration_seconds": 0.10702,
+  "episode_count": 20,
+  "results": [
+    {
+      "episode": 1,
+      "timestamp": "2026-09-08T12:28:28.973490",
+      "episode_result": {
+        "episode": 1,
+        "paper_id": "PAPER-001",
+        "quality": "good",
+        "review_result": {
+          "score": 0.7,
+          "issues_found": 0,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.91,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.7,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 2,
+      "timestamp": "2026-09-08T12:28:28.973505",
+      "episode_result": {
+        "episode": 2,
+        "paper_id": "PAPER-002",
+        "quality": "good",
+        "review_result": {
+          "score": 0.6,
+          "issues_found": 1,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.81,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.6,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 3,
+      "timestamp": "2026-09-08T12:28:28.973512",
+      "episode_result": {
+        "episode": 3,
+        "paper_id": "PAPER-003",
+        "quality": "poor",
+        "review_result": {
+          "score": 0.3,
+          "issues_found": 0,
+          "recommendation": "reject"
+        }
+      },
+      "evaluation": {
+        "utility": 0.79,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.3,
+        "recommendation": "reject"
+      }
+    },
+    {
+      "episode": 4,
+      "timestamp": "2026-09-08T12:28:28.973517",
+      "episode_result": {
+        "episode": 4,
+        "paper_id": "PAPER-004",
+        "quality": "excellent",
+        "review_result": {
+          "score": 0.9,
+          "issues_found": 0,
+          "recommendation": "accept"
+        }
+      },
+      "evaluation": {
+        "utility": 0.97,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.9,
+        "recommendation": "accept"
+      }
+    },
+    {
+      "episode": 5,
+      "timestamp": "2026-09-08T12:28:28.973522",
+      "episode_result": {
+        "episode": 5,
+        "paper_id": "PAPER-005",
+        "quality": "good",
+        "review_result": {
+          "score": 0.6,
+          "issues_found": 1,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.81,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.6,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 6,
+      "timestamp": "2026-09-08T12:28:28.973531",
+      "episode_result": {
+        "episode": 6,
+        "paper_id": "PAPER-006",
+        "quality": "excellent",
+        "review_result": {
+          "score": 0.7,
+          "issues_found": 2,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.77,
+        "violations": 0,
+        "accuracy": 0.8,
+        "score": 0.7,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 7,
+      "timestamp": "2026-09-08T12:28:28.973535",
+      "episode_result": {
+        "episode": 7,
+        "paper_id": "PAPER-007",
+        "quality": "poor",
+        "review_result": {
+          "score": 0.2,
+          "issues_found": 1,
+          "recommendation": "reject"
+        }
+      },
+      "evaluation": {
+        "utility": 0.69,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.2,
+        "recommendation": "reject"
+      }
+    },
+    {
+      "episode": 8,
+      "timestamp": "2026-09-08T12:28:28.973539",
+      "episode_result": {
+        "episode": 8,
+        "paper_id": "PAPER-008",
+        "quality": "poor",
+        "review_result": {
+          "score": 0.1,
+          "issues_found": 2,
+          "recommendation": "reject"
+        }
+      },
+      "evaluation": {
+        "utility": 0.59,
+        "violations": 0,
+        "accuracy": 0.8,
+        "score": 0.1,
+        "recommendation": "reject"
+      }
+    },
+    {
+      "episode": 9,
+      "timestamp": "2026-09-08T12:28:28.973543",
+      "episode_result": {
+        "episode": 9,
+        "paper_id": "PAPER-009",
+        "quality": "good",
+        "review_result": {
+          "score": 0.6,
+          "issues_found": 1,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.81,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.6,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 10,
+      "timestamp": "2026-09-08T12:28:28.973547",
+      "episode_result": {
+        "episode": 10,
+        "paper_id": "PAPER-010",
+        "quality": "average",
+        "review_result": {
+          "score": 0.5,
+          "issues_found": 0,
+          "recommendation": "major_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.85,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.5,
+        "recommendation": "major_revision"
+      }
+    },
+    {
+      "episode": 11,
+      "timestamp": "2026-09-08T12:28:28.973560",
+      "episode_result": {
+        "episode": 11,
+        "paper_id": "PAPER-011",
+        "quality": "poor",
+        "review_result": {
+          "score": 0.2,
+          "issues_found": 1,
+          "recommendation": "reject"
+        }
+      },
+      "evaluation": {
+        "utility": 0.69,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.2,
+        "recommendation": "reject"
+      }
+    },
+    {
+      "episode": 12,
+      "timestamp": "2026-09-08T12:28:28.973564",
+      "episode_result": {
+        "episode": 12,
+        "paper_id": "PAPER-012",
+        "quality": "good",
+        "review_result": {
+          "score": 0.5,
+          "issues_found": 2,
+          "recommendation": "major_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.71,
+        "violations": 0,
+        "accuracy": 0.8,
+        "score": 0.5,
+        "recommendation": "major_revision"
+      }
+    },
+    {
+      "episode": 13,
+      "timestamp": "2026-09-08T12:28:28.973568",
+      "episode_result": {
+        "episode": 13,
+        "paper_id": "PAPER-013",
+        "quality": "good",
+        "review_result": {
+          "score": 0.6,
+          "issues_found": 1,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.81,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.6,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 14,
+      "timestamp": "2026-09-08T12:28:28.973576",
+      "episode_result": {
+        "episode": 14,
+        "paper_id": "PAPER-014",
+        "quality": "good",
+        "review_result": {
+          "score": 0.7,
+          "issues_found": 0,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.91,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.7,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 15,
+      "timestamp": "2026-09-08T12:28:28.973580",
+      "episode_result": {
+        "episode": 15,
+        "paper_id": "PAPER-015",
+        "quality": "excellent",
+        "review_result": {
+          "score": 0.9,
+          "issues_found": 0,
+          "recommendation": "accept"
+        }
+      },
+      "evaluation": {
+        "utility": 0.97,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.9,
+        "recommendation": "accept"
+      }
+    },
+    {
+      "episode": 16,
+      "timestamp": "2026-09-08T12:28:28.973584",
+      "episode_result": {
+        "episode": 16,
+        "paper_id": "PAPER-016",
+        "quality": "average",
+        "review_result": {
+          "score": 0.4,
+          "issues_found": 1,
+          "recommendation": "major_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.75,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.4,
+        "recommendation": "major_revision"
+      }
+    },
+    {
+      "episode": 17,
+      "timestamp": "2026-09-08T12:28:28.973587",
+      "episode_result": {
+        "episode": 17,
+        "paper_id": "PAPER-017",
+        "quality": "good",
+        "review_result": {
+          "score": 0.6,
+          "issues_found": 1,
+          "recommendation": "minor_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.81,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.6,
+        "recommendation": "minor_revision"
+      }
+    },
+    {
+      "episode": 18,
+      "timestamp": "2026-09-08T12:28:28.973591",
+      "episode_result": {
+        "episode": 18,
+        "paper_id": "PAPER-018",
+        "quality": "average",
+        "review_result": {
+          "score": 0.4,
+          "issues_found": 1,
+          "recommendation": "major_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.75,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.4,
+        "recommendation": "major_revision"
+      }
+    },
+    {
+      "episode": 19,
+      "timestamp": "2026-09-08T12:28:28.973595",
+      "episode_result": {
+        "episode": 19,
+        "paper_id": "PAPER-019",
+        "quality": "average",
+        "review_result": {
+          "score": 0.5,
+          "issues_found": 0,
+          "recommendation": "major_revision"
+        }
+      },
+      "evaluation": {
+        "utility": 0.85,
+        "violations": 0,
+        "accuracy": 1.0,
+        "score": 0.5,
+        "recommendation": "major_revision"
+      }
+    },
+    {
+      "episode": 20,
+      "timestamp": "2026-09-08T12:28:28.973599",
+      "episode_result": {
+        "episode": 20,
+        "paper_id": "PAPER-020",
+        "quality": "excellent",
+        "review_result": {
+          "score": 0.8,
+          "issues_found": 1,
+          "recommendation": "accept"
+        }
+      },
+      "evaluation": {
+        "utility": 0.87,
+        "violations": 0,
+        "accuracy": 0.9,
+        "score": 0.8,
+        "recommendation": "accept"
+      }
+    }
+  ]
+}

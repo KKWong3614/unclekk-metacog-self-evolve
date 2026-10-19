@@ -1,0 +1,429 @@
+{
+  "domain": "code_review",
+  "start_time": "2026-09-08T12:28:28.750383",
+  "end_time": "2026-09-08T12:28:28.865730",
+  "duration_seconds": 0.115347,
+  "episode_count": 20,
+  "results": [
+    {
+      "episode": 1,
+      "timestamp": "2026-09-08T12:28:28.865623",
+      "episode_result": {
+        "episode": 1,
+        "pr_id": "PR-001",
+        "issue_type": "error_handling",
+        "review_result": {
+          "found_issues": 3,
+          "critical_issues": 2,
+          "suggestions": 6,
+          "review_quality": 0.5650457666102511
+        }
+      },
+      "evaluation": {
+        "utility": 0.506,
+        "violations": 2,
+        "found_issues": 3,
+        "critical_issues": 2
+      }
+    },
+    {
+      "episode": 2,
+      "timestamp": "2026-09-08T12:28:28.865639",
+      "episode_result": {
+        "episode": 2,
+        "pr_id": "PR-002",
+        "issue_type": "security_vulnerability",
+        "review_result": {
+          "found_issues": 5,
+          "critical_issues": 1,
+          "suggestions": 5,
+          "review_quality": 0.750752756503102
+        }
+      },
+      "evaluation": {
+        "utility": 0.6903,
+        "violations": 1,
+        "found_issues": 5,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 3,
+      "timestamp": "2026-09-08T12:28:28.865648",
+      "episode_result": {
+        "episode": 3,
+        "pr_id": "PR-003",
+        "issue_type": "performance_issue",
+        "review_result": {
+          "found_issues": 5,
+          "critical_issues": 2,
+          "suggestions": 5,
+          "review_quality": 0.789960772809978
+        }
+      },
+      "evaluation": {
+        "utility": 0.646,
+        "violations": 2,
+        "found_issues": 5,
+        "critical_issues": 2
+      }
+    },
+    {
+      "episode": 4,
+      "timestamp": "2026-09-08T12:28:28.865653",
+      "episode_result": {
+        "episode": 4,
+        "pr_id": "PR-004",
+        "issue_type": "code_style",
+        "review_result": {
+          "found_issues": 2,
+          "critical_issues": 1,
+          "suggestions": 8,
+          "review_quality": 0.5311009098731041
+        }
+      },
+      "evaluation": {
+        "utility": 0.6024,
+        "violations": 1,
+        "found_issues": 2,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 5,
+      "timestamp": "2026-09-08T12:28:28.865657",
+      "episode_result": {
+        "episode": 5,
+        "pr_id": "PR-005",
+        "issue_type": "security_vulnerability",
+        "review_result": {
+          "found_issues": 5,
+          "critical_issues": 0,
+          "suggestions": 8,
+          "review_quality": 0.6319744208991482
+        }
+      },
+      "evaluation": {
+        "utility": 0.7928,
+        "violations": 0,
+        "found_issues": 5,
+        "critical_issues": 0
+      }
+    },
+    {
+      "episode": 6,
+      "timestamp": "2026-09-08T12:28:28.865661",
+      "episode_result": {
+        "episode": 6,
+        "pr_id": "PR-006",
+        "issue_type": "naming_convention",
+        "review_result": {
+          "found_issues": 4,
+          "critical_issues": 1,
+          "suggestions": 6,
+          "review_quality": 0.5102583540622977
+        }
+      },
+      "evaluation": {
+        "utility": 0.6091,
+        "violations": 1,
+        "found_issues": 4,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 7,
+      "timestamp": "2026-09-08T12:28:28.865665",
+      "episode_result": {
+        "episode": 7,
+        "pr_id": "PR-007",
+        "issue_type": "security_vulnerability",
+        "review_result": {
+          "found_issues": 3,
+          "critical_issues": 1,
+          "suggestions": 3,
+          "review_quality": 0.6235863807926328
+        }
+      },
+      "evaluation": {
+        "utility": 0.5394,
+        "violations": 1,
+        "found_issues": 3,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 8,
+      "timestamp": "2026-09-08T12:28:28.865669",
+      "episode_result": {
+        "episode": 8,
+        "pr_id": "PR-008",
+        "issue_type": "error_handling",
+        "review_result": {
+          "found_issues": 4,
+          "critical_issues": 0,
+          "suggestions": 7,
+          "review_quality": 0.8922171611887157
+        }
+      },
+      "evaluation": {
+        "utility": 0.8669,
+        "violations": 0,
+        "found_issues": 4,
+        "critical_issues": 0
+      }
+    },
+    {
+      "episode": 9,
+      "timestamp": "2026-09-08T12:28:28.865673",
+      "episode_result": {
+        "episode": 9,
+        "pr_id": "PR-009",
+        "issue_type": "naming_convention",
+        "review_result": {
+          "found_issues": 3,
+          "critical_issues": 0,
+          "suggestions": 5,
+          "review_quality": 0.7624915537554005
+        }
+      },
+      "evaluation": {
+        "utility": 0.755,
+        "violations": 0,
+        "found_issues": 3,
+        "critical_issues": 0
+      }
+    },
+    {
+      "episode": 10,
+      "timestamp": "2026-09-08T12:28:28.865678",
+      "episode_result": {
+        "episode": 10,
+        "pr_id": "PR-010",
+        "issue_type": "code_style",
+        "review_result": {
+          "found_issues": 4,
+          "critical_issues": 2,
+          "suggestions": 3,
+          "review_quality": 0.8140987990566444
+        }
+      },
+      "evaluation": {
+        "utility": 0.5656,
+        "violations": 2,
+        "found_issues": 4,
+        "critical_issues": 2
+      }
+    },
+    {
+      "episode": 11,
+      "timestamp": "2026-09-08T12:28:28.865691",
+      "episode_result": {
+        "episode": 11,
+        "pr_id": "PR-011",
+        "issue_type": "error_handling",
+        "review_result": {
+          "found_issues": 2,
+          "critical_issues": 1,
+          "suggestions": 6,
+          "review_quality": 0.5673633493035237
+        }
+      },
+      "evaluation": {
+        "utility": 0.5569,
+        "violations": 1,
+        "found_issues": 2,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 12,
+      "timestamp": "2026-09-08T12:28:28.865695",
+      "episode_result": {
+        "episode": 12,
+        "pr_id": "PR-012",
+        "issue_type": "naming_convention",
+        "review_result": {
+          "found_issues": 1,
+          "critical_issues": 0,
+          "suggestions": 5,
+          "review_quality": 0.7814948100118743
+        }
+      },
+      "evaluation": {
+        "utility": 0.7626,
+        "violations": 0,
+        "found_issues": 1,
+        "critical_issues": 0
+      }
+    },
+    {
+      "episode": 13,
+      "timestamp": "2026-09-08T12:28:28.865699",
+      "episode_result": {
+        "episode": 13,
+        "pr_id": "PR-013",
+        "issue_type": "performance_issue",
+        "review_result": {
+          "found_issues": 3,
+          "critical_issues": 1,
+          "suggestions": 6,
+          "review_quality": 0.8260994117040659
+        }
+      },
+      "evaluation": {
+        "utility": 0.7104,
+        "violations": 1,
+        "found_issues": 3,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 14,
+      "timestamp": "2026-09-08T12:28:28.865703",
+      "episode_result": {
+        "episode": 14,
+        "pr_id": "PR-014",
+        "issue_type": "naming_convention",
+        "review_result": {
+          "found_issues": 1,
+          "critical_issues": 0,
+          "suggestions": 2,
+          "review_quality": 0.8194331102079658
+        }
+      },
+      "evaluation": {
+        "utility": 0.6878,
+        "violations": 0,
+        "found_issues": 1,
+        "critical_issues": 0
+      }
+    },
+    {
+      "episode": 15,
+      "timestamp": "2026-09-08T12:28:28.865707",
+      "episode_result": {
+        "episode": 15,
+        "pr_id": "PR-015",
+        "issue_type": "security_vulnerability",
+        "review_result": {
+          "found_issues": 5,
+          "critical_issues": 1,
+          "suggestions": 2,
+          "review_quality": 0.7442742455799023
+        }
+      },
+      "evaluation": {
+        "utility": 0.5977,
+        "violations": 1,
+        "found_issues": 5,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 16,
+      "timestamp": "2026-09-08T12:28:28.865710",
+      "episode_result": {
+        "episode": 16,
+        "pr_id": "PR-016",
+        "issue_type": "code_style",
+        "review_result": {
+          "found_issues": 5,
+          "critical_issues": 2,
+          "suggestions": 7,
+          "review_quality": 0.5153252007230523
+        }
+      },
+      "evaluation": {
+        "utility": 0.5961,
+        "violations": 2,
+        "found_issues": 5,
+        "critical_issues": 2
+      }
+    },
+    {
+      "episode": 17,
+      "timestamp": "2026-09-08T12:28:28.865714",
+      "episode_result": {
+        "episode": 17,
+        "pr_id": "PR-017",
+        "issue_type": "performance_issue",
+        "review_result": {
+          "found_issues": 3,
+          "critical_issues": 2,
+          "suggestions": 5,
+          "review_quality": 0.5682887622335275
+        }
+      },
+      "evaluation": {
+        "utility": 0.4773,
+        "violations": 2,
+        "found_issues": 3,
+        "critical_issues": 2
+      }
+    },
+    {
+      "episode": 18,
+      "timestamp": "2026-09-08T12:28:28.865718",
+      "episode_result": {
+        "episode": 18,
+        "pr_id": "PR-018",
+        "issue_type": "naming_convention",
+        "review_result": {
+          "found_issues": 5,
+          "critical_issues": 2,
+          "suggestions": 6,
+          "review_quality": 0.5215330114604175
+        }
+      },
+      "evaluation": {
+        "utility": 0.5686,
+        "violations": 2,
+        "found_issues": 5,
+        "critical_issues": 2
+      }
+    },
+    {
+      "episode": 19,
+      "timestamp": "2026-09-08T12:28:28.865723",
+      "episode_result": {
+        "episode": 19,
+        "pr_id": "PR-019",
+        "issue_type": "security_vulnerability",
+        "review_result": {
+          "found_issues": 4,
+          "critical_issues": 1,
+          "suggestions": 4,
+          "review_quality": 0.5762286260374289
+        }
+      },
+      "evaluation": {
+        "utility": 0.5755,
+        "violations": 1,
+        "found_issues": 4,
+        "critical_issues": 1
+      }
+    },
+    {
+      "episode": 20,
+      "timestamp": "2026-09-08T12:28:28.865727",
+      "episode_result": {
+        "episode": 20,
+        "pr_id": "PR-020",
+        "issue_type": "code_style",
+        "review_result": {
+          "found_issues": 2,
+          "critical_issues": 2,
+          "suggestions": 7,
+          "review_quality": 0.8483240876283893
+        }
+      },
+      "evaluation": {
+        "utility": 0.5493,
+        "violations": 2,
+        "found_issues": 2,
+        "critical_issues": 2
+      }
+    }
+  ]
+}

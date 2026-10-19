@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-09-08T12:28:28.974769",
+  "domains": {
+    "code_review": {
+      "average_utility": 0.6327849999999999,
+      "average_accuracy": null,
+      "utility_trend": "degrading",
+      "episode_count": 20,
+      "duration_seconds": 0.115347
+    },
+    "paper_review": {
+      "average_utility": 0.806,
+      "average_accuracy": 0.9199999999999999,
+      "utility_trend": "stable",
+      "episode_count": 20,
+      "duration_seconds": 0.10702
+    }
+  },
+  "total_episodes": 40,
+  "total_duration_seconds": 0.222367,
+  "average_duration_per_episode": 0.005559175
+}
