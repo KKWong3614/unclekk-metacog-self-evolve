@@ -59,7 +59,7 @@
 - 修法：`propose` 时加 `--episode E001 --episode E002` 引用真实证据；或先多记几次 `episode`。
 
 ### 11. [HUMAN] 元层改动 / 高风险
-- 修法：`apply` 时加 `--human-ok` 显式确认。
+- 修法：人类在真实 TTY 运行 `apply --id <提案>`，交互式输入口令当场完成签绑定签名（v2.5.7 合并方案；`confirm --approve` / `apply --token` 已于 v2.5.7 移除）。无人值守场景：`confirm --sign --id <提案>` 预签名 → `apply --id <提案> --sig <签名>`（v2.25.14）。
 
 ## 三、apply（RC=2）
 
@@ -68,8 +68,8 @@
 - 修法：`retrieve --artifact <A>` 查有效 ID，确认拼写（过闸后 ID 不变）。
 
 ### 13. 需人类确认
-- 现象：`[HOLD] P-xxx 需人类确认，加 --human-ok 才能应用`
-- 修法：确认无误后 `apply --id <P> --human-ok`。
+- 现象：`[HOLD] P-xxx 需人类确认（requires_human）`
+- 修法：确认无误后由人类在真实 TTY 运行 `apply --id <P>` 交互式口令签绑定签名；无人值守 `confirm --sign --id <P>` → `apply --id <P> --sig <签名>`。
 
 ## 四、init-domain（RC=2）
 

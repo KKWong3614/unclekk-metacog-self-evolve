@@ -4,6 +4,7 @@
 import os as _os
 _os.environ.pop('PYTHONHOME', None)
 _os.environ.pop('PYTHONPATH', None)
+_os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5"
 
 # -*- coding: utf-8 -*-
 """
@@ -99,16 +100,20 @@ def test_large_file_handling():
                 f.write(json.dumps({"id": f"E-{i:05d}", "utility": 0.7,
                                      "violations": 0, "pad": "x" * 80}) + '\n')
         
-        # 应该返回空列表并输出警告
+        # v2.27.16（H-4 收口）：>512KB 不再截断为空——逐行流式，全部记录可读（原 512KB 硬截断
+        # 使长期运行的大 applies/episodes 被误判为空，条目审计对健康大库全量误报）。
         import io
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         eps = metacog.read_jsonl(ep_file)
+        result.add("大文件 (>512KB) 不截断：返回全部 6000 条", len(eps) == 6000, f"返回 {len(eps)} 条")
+
+        # 显式传 max_size 超限：仅输出 WARN 告警，仍不截断（上限语义由调用方显式裁定）
+        eps2 = metacog.read_jsonl(ep_file, max_size=512 * 1024)
         stderr_output = sys.stderr.getvalue()
         sys.stderr = old_stderr
-        
-        result.add("大文件 (>512KB) 返回空列表", len(eps) == 0, f"返回 {len(eps)} 条")
-        result.add("大文件输出警告", "[WARN]" in stderr_output, "警告消息包含 WARN")
+        result.add("显式 max_size 超限：不截断且输出 WARN", len(eps2) == 6000 and "[WARN]" in stderr_output,
+                   f"返回 {len(eps2)} 条, WARN={'[WARN]' in stderr_output}")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
     return result

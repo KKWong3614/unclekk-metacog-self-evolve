@@ -11,8 +11,8 @@ v2.10.0 回归测试套件（Hermes r7 收口，独立验证，非自验自收�
     （hmac 非字符串）」始终 fail-closed。cutoff 覆盖为 (2,19) 时仍演示旧链容忍（过渡期语义保留）。
   - HIGH#3（epoch 逐条校验）：首条带 epoch=v290 进入严格校验后，中段注入缺 epoch 伪造条目 → fail-closed
     （migration / rollback 两条链同测）。
-  - MED#1（账本锚生产护栏）：默认（共享）锚在无 METACOG_TRUST_ROOT_ALLOW_DEFAULT 时
-    _resolve_anchor_key 抛 LedgerAnchorDefaultError（fail-closed）；设置专属锚或 ALLOW_DEFAULT 后不抛。
+  - MED#1（账本锚生产护栏）：锚密钥未配置（v2.27.17 C-01 后默认锚已删除）时
+    _resolve_anchor_key 抛 LedgerAnchorDefaultError（fail-closed）；设置专属锚后不抛。
 
 零第三方依赖，import metacog 直接单测。
 """
@@ -141,8 +141,8 @@ def test_r7_old_chain(r):
         _ok_a, _cnt_a = st._verify_migration_audit()
         r.add("v2.11.0 旧链（首条无 epoch，HMAC 全伪）结构合法→fail-closed False [H-C 收口]",
               _ok_a is False and _cnt_a == 2, "ok={} cnt={}".format(_ok_a, _cnt_a))
-        # 过渡演示：截止期前（cutoff=(2, 26)）仍容忍
-        _ok_a_t, _cnt_a_t = st._verify_migration_audit(cutoff=(2, 26))
+        # 过渡演示：截止期前（cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1)）仍容忍
+        _ok_a_t, _cnt_a_t = st._verify_migration_audit(cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1))
         r.add("截止期前(cutoff=2,23) 旧链结构合法→容忍 True（过渡演示）",
               _ok_a_t is True and _cnt_a_t == 2, "ok={} cnt={}".format(_ok_a_t, _cnt_a_t))
 
@@ -224,34 +224,31 @@ def test_r7_midchain_epoch(r):
         pass
 
 
-# ----------------------------------------------------------------- MED#1：默认锚无 ALLOW_DEFAULT → fail-closed
+# ----------------------------------------------------------------- MED#1：锚密钥未配置 → fail-closed
 def test_r7_default_anchor_guard(r):
-    """v2.10.0（MED#1）：默认（共享）锚在无 METACOG_TRUST_ROOT_ALLOW_DEFAULT 时 _resolve_anchor_key
-    抛 LedgerAnchorDefaultError（fail-closed）；设专属锚或 ALLOW_DEFAULT 后不抛。"""
-    _orig_allow = _os.environ.get("METACOG_TRUST_ROOT_ALLOW_DEFAULT")
+    """v2.10.0（MED#1，v2.27.17 C-01 更新语义）：锚密钥未配置（源码内嵌默认锚已删除）时
+    _resolve_anchor_key 抛 LedgerAnchorDefaultError（fail-closed）；设专属锚后不抛。"""
     _orig_key = _os.environ.get("METACOG_TRUST_ROOT_ANCHOR_KEY")
     try:
-        # 模拟生产：默认锚 + 无 ALLOW_DEFAULT → 抛错
-        _os.environ.pop("METACOG_TRUST_ROOT_ALLOW_DEFAULT", None)
+        # 模拟生产：锚密钥未配置 → 抛错
         _os.environ.pop("METACOG_TRUST_ROOT_ANCHOR_KEY", None)
         _raised = False
         try:
             metacog._resolve_anchor_key()
         except metacog.LedgerAnchorDefaultError:
             _raised = True
-        r.add("默认锚无 ALLOW_DEFAULT → 抛 LedgerAnchorDefaultError（fail-closed）", _raised)
+        r.add("锚密钥未配置 → 抛 LedgerAnchorDefaultError（fail-closed）", _raised)
 
-        # 设 ALLOW_DEFAULT=1 → 不抛（本地开发/测试承担风险）
-        _os.environ["METACOG_TRUST_ROOT_ALLOW_DEFAULT"] = "1"
+        # 设专属锚（本地开发/测试）→ 不抛
+        _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5"
         _raised2 = False
         try:
             metacog._resolve_anchor_key()
         except metacog.LedgerAnchorDefaultError:
             _raised2 = True
-        r.add("设 ALLOW_DEFAULT=1 → 不抛（本地开发模式）", not _raised2)
+        r.add("设专属 METACOG_TRUST_ROOT_ANCHOR_KEY → 不抛（测试密钥）", not _raised2)
 
-        # 设专属锚（覆盖默认）→ 不抛（生产正确配置）
-        _os.environ.pop("METACOG_TRUST_ROOT_ALLOW_DEFAULT", None)
+        # 设另一专属锚（生产正确配置）→ 不抛
         _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = _hmac.new(b"prod-secret", b"x", hashlib.sha256).digest().hex()
         _raised3 = False
         try:
@@ -260,11 +257,8 @@ def test_r7_default_anchor_guard(r):
             _raised3 = True
         r.add("设专属 METACOG_TRUST_ROOT_ANCHOR_KEY → 不抛（生产配置）", not _raised3)
     finally:
-        # 还原环境变量（不影响其它测试 / 运行器注入的 ALLOW_DEFAULT）
-        for _k in ("METACOG_TRUST_ROOT_ALLOW_DEFAULT", "METACOG_TRUST_ROOT_ANCHOR_KEY"):
-            _os.environ.pop(_k, None)
-        if _orig_allow is not None:
-            _os.environ["METACOG_TRUST_ROOT_ALLOW_DEFAULT"] = _orig_allow
+        # 还原环境变量（不影响其它测试 / 运行器注入的测试密钥）
+        _os.environ.pop("METACOG_TRUST_ROOT_ANCHOR_KEY", None)
         if _orig_key is not None:
             _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = _orig_key
 

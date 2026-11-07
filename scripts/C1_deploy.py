@@ -4,7 +4,7 @@ r"""
 C1_deploy.py -- 单文件 Windows OS 隔离部署包装器（unclekk-metacog-self-evolve）
 
 SkillHub 拒绝 .ps1 文件，故本文件将 8 个 C1_*.ps1（L1/L2/L3 系统级隔离部署脚本，
-已在加固主机 PC-20230325SHQZ 实机验证）以 base64 内嵌，运行时解包到本机临时目录
+已在加固主机 <HOST> 实机验证）以 base64 内嵌，运行时解包到本机临时目录
 并以 `powershell -File` 调用。新用户装一个包即可拿到完整「系统级可控自指」闭环，
 无需二次分发 .ps1。
 
@@ -46,17 +46,27 @@ BUNDLE_NAME = "metacog_c1_bundle"
 
 
 def _bundle_dir():
-    d = os.path.join(tempfile.gettempdir(), BUNDLE_NAME)
-    os.makedirs(d, exist_ok=True)
-    return d
+    # 安全性：每次调用生成唯一随机临时目录（不复用固定 %TEMP%/metacog_c1_bundle），
+    # 避免该固定路径被预置恶意 .ps1 后被本包装器执行（云鼎扫描建议：解包到随机临时目录）。
+    return tempfile.mkdtemp(prefix="metacog_c1_")
 
 
 def _extract_all(bundle):
+    failures = []
     for name, b64 in _EMBEDDED.items():
         p = os.path.join(bundle, name)
+        raw = base64.b64decode(b64)
         with open(p, "wb") as f:
-            f.write(base64.b64decode(b64))
-    return bundle
+            f.write(raw)
+        # 完整性校验（fail-closed）：提取后字节必须与内嵌 base64 解码结果逐字节一致，
+        # 防御临时目录被篡改/植入，确保执行的 .ps1 即为受控内嵌内容。
+        with open(p, "rb") as f:
+            if f.read() != raw:
+                failures.append(name)
+    if failures:
+        sys.stderr.write("完整性校验失败（内嵌脚本被篡改或提取损坏）：%s\n" % ", ".join(failures))
+        return False
+    return True
 
 
 def _skill_dir():
@@ -75,11 +85,25 @@ def _find_metacog_root(skill_dir):
 
 
 def _run_pw(ps1, args, cwd=None):
-    bundle = _extract_all(_bundle_dir())
+    bundle = _bundle_dir()
+    if not _extract_all(bundle):
+        return 2
     ps1_path = os.path.join(bundle, ps1)
     if not os.path.exists(ps1_path):
         sys.stderr.write("解包失败：缺少 %s\n" % ps1_path)
         return 2
+    # 路径包含性检查：确保待执行 .ps1 的真实路径位于本次随机临时目录内，
+    # 防止符号链接/目录遍历植入导致执行目录外的脚本。
+    bundle_real = os.path.realpath(bundle)
+    ps1_real = os.path.realpath(ps1_path)
+    if not (ps1_real == os.path.join(bundle_real, ps1)
+            or ps1_real.startswith(bundle_real + os.sep)):
+        sys.stderr.write("路径越界拒绝执行：%s 不在 %s 内\n" % (ps1_real, bundle_real))
+        return 2
+    # 显式特权操作确认：C1 部署为系统级 OS 隔离操作，须以管理员身份运行，
+    # 且会解包并执行内嵌 PowerShell 脚本（云鼎扫描建议的"显式用户确认"替代方案）。
+    sys.stderr.write("[C1] 即将以管理员权限运行特权隔离部署脚本：%s\n" % ps1)
+    # -ExecutionPolicy Bypass 仅作用于本次 powershell 进程（进程级，非机器级策略变更）。
     cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1_path] + list(args)
     rc = subprocess.call(cmd, cwd=cwd)
     return rc

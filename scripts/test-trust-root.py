@@ -45,7 +45,7 @@ import sigcrypto
 
 # v2.8.1 C-9：全局允许默认（源码内嵌共享）锚密钥用于测试（本地开发显式承担风险）。
 # 生产/非本地部署须以 METACOG_TRUST_ROOT_ANCHOR_KEY 覆盖；C-9 拒绝测试会临时撤销本项。
-_os.environ["METACOG_TRUST_ROOT_ALLOW_DEFAULT"] = "1"
+_os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5"
 
 # v2.8.2 C-11：全局允许 legacy（无外部锚）回落（部署契约逃生舱），使既有 legacy 测试不误伤。
 # 生产/非本地部署须显式启用外部锚或保留默认 deny；test_c11_default_failclosed_and_optout 会临时撤销本项验证默认 deny。
@@ -192,11 +192,13 @@ def test_trust_root_abstraction():
     except NotImplementedError:
         r.add("token stub sign raises", True)
 
-    # 工厂：legacy → None；hsm+root_pubkey → hsm（genuine）；hsm+oob+root_pubkey → hsm+oob；
-    #       hsm 无 verifier → deny；oob 无 verifier → deny；corrupt → deny；未知 backend → deny；
-    #       disabled → None
-    r.add("factory legacy default → None",
-          trust_root.build_trust_root(trust_root.TrustRootConfig()) is None)
+    # 工厂：legacy → DenyTrustRoot（H-01 删除，v2.27.17）；hsm+root_pubkey → hsm（genuine）；
+    #       hsm+oob+root_pubkey → hsm+oob；hsm 无 verifier → deny；oob 无 verifier → deny；
+    #       corrupt → deny；未知 backend → deny；disabled → DenyTrustRoot
+    _lg = trust_root.build_trust_root(trust_root.TrustRootConfig())
+    r.add("factory legacy default → DenyTrustRoot（external-anchor-required，H-01 删除）",
+          isinstance(_lg, trust_root.DenyTrustRoot)
+          and getattr(_lg, "reason", "") == "external-anchor-required")
     r.add("factory hsm + root_pubkey → hsm (genuine offline root)",
           trust_root.build_trust_root(trust_root.TrustRootConfig(
               enabled=True, backend="hsm", attestation_path="x",
@@ -217,9 +219,11 @@ def test_trust_root_abstraction():
     r.add("factory unknown backend → deny",
           trust_root.build_trust_root(trust_root.TrustRootConfig(
               enabled=True, backend="weird")).name == "deny")
-    r.add("factory disabled → None",
-          trust_root.build_trust_root(trust_root.TrustRootConfig(
-              enabled=False, backend="hsm")) is None)
+    _dsb = trust_root.build_trust_root(trust_root.TrustRootConfig(
+        enabled=False, backend="hsm"))
+    r.add("factory disabled → DenyTrustRoot（external-anchor-required，H-01 删除）",
+          isinstance(_dsb, trust_root.DenyTrustRoot)
+          and getattr(_dsb, "reason", "") == "external-anchor-required")
     return r
 
 
@@ -1547,8 +1551,10 @@ def test_load_enabled_string_false():
         (td / "ledger" / "trust-root.json").write_text(
             json.dumps(_c1), encoding="utf-8")
         cfg = trust_root.TrustRootConfig.load(td)
+        _b = trust_root.build_trust_root(cfg)
         r.add("enabled='false' 字符串 → enabled 为 False",
-              cfg.enabled is False and trust_root.build_trust_root(cfg) is None)
+              cfg.enabled is False and isinstance(_b, trust_root.DenyTrustRoot)
+              and getattr(_b, "reason", "") == "external-anchor-required")
         # 对照：enabled=true(布尔) 仍生效
         _c2 = {"enabled": True, "backend": "oob"}
         _c2["_sig"] = trust_root.sign_trust_root_config(_c2, trust_root.get_anchor_key())
@@ -1663,34 +1669,51 @@ def test_trust_root_config_c1_signature_closure():
 
 
 def test_c9_default_anchor_key_rejected_for_external():
-    """v2.8.1 C-9 硬化：默认（源码内嵌共享）锚密钥不得用于启用外部锚；须以专属 env 密钥或显式 ALLOW_DEFAULT。
-    - 未设 ALLOW_DEFAULT 且用默认密钥 → write_trust_root_config 抛 TrustRootWriteError（拒绝）。
-    - 设 ALLOW_DEFAULT=1 → 允许（本地开发显式承担风险）。"""
+    """v2.27.17（C-01 收口 + M-01）：锚密钥 env-only——源码内嵌默认锚已删除（「宁可装不上，不可自签」）。
+    - 未配置锚密钥 → write_trust_root_config 抛 TrustRootWriteError（拒绝启用外部锚）；
+    - 非法 base64 或解码后 <32 字节 → ValueError fail-closed，不回落任何默认锚；
+    - 仅合法专属密钥（≥32 字节）→ 允许启用。"""
     r = T()
-    orig = _os.environ.get("METACOG_TRUST_ROOT_ALLOW_DEFAULT")
+    orig = _os.environ.get("METACOG_TRUST_ROOT_ANCHOR_KEY")
     td = Path(tempfile.mkdtemp(prefix="tr_c9_"))
     try:
         pub_a, _pa = trust_root.gen_offline_root_keypair()
-        # ① 移除 ALLOW_DEFAULT（模拟生产：未显式承担风险）→ 拒绝
-        _os.environ.pop("METACOG_TRUST_ROOT_ALLOW_DEFAULT", None)
+        # ① 未配置锚密钥（模拟生产：无专属密钥）→ 拒绝（C-01：「宁可装不上，不可自签」）
+        _os.environ.pop("METACOG_TRUST_ROOT_ANCHOR_KEY", None)
         raised = False
         try:
             trust_root.write_trust_root_config(td, "oob", root_pubkey=pub_a)
         except trust_root.TrustRootWriteError:
             raised = True
-        r.add("默认密钥+无 ALLOW_DEFAULT → 拒绝(TrustRootWriteError)", raised)
-        # ② 显式 ALLOW_DEFAULT=1 → 允许（本地开发）
-        _os.environ["METACOG_TRUST_ROOT_ALLOW_DEFAULT"] = "1"
+        r.add("未配置锚密钥 → 拒绝(TrustRootWriteError，宁可装不上)", raised)
+        # ② 非法 base64 → ValueError（M-01 fail-closed）
+        _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "!!!not-base64!!!"
+        raised2 = False
+        try:
+            trust_root.write_trust_root_config(td, "oob", root_pubkey=pub_a)
+        except ValueError:
+            raised2 = True
+        r.add("非法 base64 锚密钥 → ValueError(M-01 fail-closed)", raised2)
+        # ③ 解码后 <32 字节 → ValueError（M-01 长度校验；"dG9vLXNob3J0LWtleQ==" = b"too-short-key" 13 字节）
+        _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "dG9vLXNob3J0LWtleQ=="
+        raised3 = False
+        try:
+            trust_root.write_trust_root_config(td, "oob", root_pubkey=pub_a)
+        except ValueError:
+            raised3 = True
+        r.add("<32 字节锚密钥 → ValueError(M-01 长度校验)", raised3)
+        # ④ 合法专属密钥（≥32 字节）→ 允许
+        _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5"
         trust_root.write_trust_root_config(td, "oob", root_pubkey=pub_a)
         cfg = trust_root.TrustRootConfig.load(td)
-        r.add("ALLOW_DEFAULT=1 → 允许(本地开发显式承担风险)",
+        r.add("合法专属锚密钥 → 允许启用外部锚",
               cfg.corrupt is False and cfg.enabled is True and cfg.root_pubkey == pub_a)
     finally:
-        # 还原模块全局态（默认 "1"）
+        # 还原模块全局态（默认测试密钥）
         if orig is None:
-            _os.environ.pop("METACOG_TRUST_ROOT_ALLOW_DEFAULT", None)
+            _os.environ.pop("METACOG_TRUST_ROOT_ANCHOR_KEY", None)
         else:
-            _os.environ["METACOG_TRUST_ROOT_ALLOW_DEFAULT"] = orig
+            _os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = orig
         shutil.rmtree(td, ignore_errors=True)
     return r
 
@@ -1903,8 +1926,9 @@ def test_c10_script_file_deletion_current_none():
 
 
 def test_c10_trust_root_strict_truthtable():
-    """v2.8.5 附加：METACOG_TRUST_ROOT_STRICT 须严格 == '1'（与 ALLOW_LEGACY_NO_EXTERNAL_ANCHOR 一致），
-    =0/'false'/未设置均不触发硬闸；=1 触发。验证 cmd_apply 硬闸真值表。"""
+    """v2.8.5 → v2.27.17（C-01 专项 H-05 收口更新语义）：完整性硬闸**默认强制**（opt-in 翻转），
+    METACOG_TRUST_ROOT_LENIENT=1（严格 =='1'）为唯一显式退出（warn 留痕）；
+    METACOG_TRUST_ROOT_STRICT 不再是开关。验证 cmd_apply 硬闸真值表。"""
     r = T()
     base = Path(tempfile.mkdtemp(prefix="tr_c10_strict_"))
     try:
@@ -1916,27 +1940,36 @@ def test_c10_trust_root_strict_truthtable():
             _c10_populate_scripts(st, sd)
             ns = SimpleNamespace(id=None)
             env_key = "METACOG_TRUST_ROOT_STRICT"
+            lenient_key = "METACOG_TRUST_ROOT_LENIENT"
             orig = _os.environ.get(env_key)
-            def setenv(v):
+            orig_len = _os.environ.get(lenient_key)
+            def setenv(k, v):
                 if v is None:
-                    _os.environ.pop(env_key, None)
+                    _os.environ.pop(k, None)
                 else:
-                    _os.environ[env_key] = v
+                    _os.environ[k] = v
             try:
-                setenv(None); _c10_inject_drift(st)
-                r.add("STRICT 未设置 + 漂移 → cmd_apply 不触发硬闸(rc!=3)",
+                setenv(env_key, None); _c10_inject_drift(st)
+                r.add("默认（无 LENIENT）+ 漂移 → cmd_apply 硬闸拒绝(rc==3)",
+                      metacog.cmd_apply(st, ns) == 3)
+                setenv(env_key, "0"); _c10_inject_drift(st)
+                r.add("STRICT=0 不再豁免 + 漂移 → rc==3（H-05 默认强制）",
+                      metacog.cmd_apply(st, ns) == 3)
+                setenv(env_key, "false"); _c10_inject_drift(st)
+                r.add("STRICT=false 同样不豁免 → rc==3",
+                      metacog.cmd_apply(st, ns) == 3)
+                setenv(lenient_key, "1"); _c10_inject_drift(st)
+                r.add("LENIENT=1 显式退出 → cmd_apply 不触发硬闸(rc!=3)",
                       metacog.cmd_apply(st, ns) != 3)
-                setenv("0"); _c10_inject_drift(st)
-                r.add("STRICT=0 → cmd_apply 不触发硬闸(rc!=3，truthy 旧行为已修)",
-                      metacog.cmd_apply(st, ns) != 3)
-                setenv("false"); _c10_inject_drift(st)
-                r.add("STRICT=false → cmd_apply 不触发硬闸(rc!=3)",
-                      metacog.cmd_apply(st, ns) != 3)
-                setenv("1"); _c10_inject_drift(st)
-                r.add("STRICT=1 → cmd_apply 硬闸拒绝(rc==3)",
+                setenv(lenient_key, "0"); _c10_inject_drift(st)
+                r.add("LENIENT=0（严格 =='1'）不豁免 → rc==3",
+                      metacog.cmd_apply(st, ns) == 3)
+                setenv(lenient_key, None); _c10_inject_drift(st)
+                r.add("LENIENT 撤销后恢复强制 → rc==3",
                       metacog.cmd_apply(st, ns) == 3)
             finally:
-                setenv(orig)
+                setenv(env_key, orig)
+                setenv(lenient_key, orig_len)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     finally:
@@ -2081,8 +2114,11 @@ def test_c10_keygen_idempotent_still_gates():
 
 
 def test_c10_gate_helper_truthtable():
-    """v2.8.6 N-5/N-7：集中硬闸 helper _script_integrity_drift_if_enforced 真值表 +
-    外部锚异常降级（不再静默 fail-open）。4 个调用点（apply/resign/retrieve/keygen）均委托此 helper。"""
+    """v2.8.6 N-5/N-7 → v2.27.17（C-01 专项 H-05 收口更新语义）：集中硬闸 helper
+    _script_integrity_drift_if_enforced 真值表——默认强制（有基线即 enforced）、
+    METACOG_TRUST_ROOT_LENIENT=1 唯一显式退出；外部锚状态与硬闸解耦
+    （external_trust_root 异常不再影响 helper，old 降级分支随 H-05 重写移除）。
+    4 个调用点（apply/resign/retrieve/keygen）均委托此 helper。"""
     r = T()
     base = Path(tempfile.mkdtemp(prefix="tr_c10_helper_"))
     try:
@@ -2092,7 +2128,7 @@ def test_c10_gate_helper_truthtable():
         try:
             st.script_dir = sd
             _c10_populate_scripts(st, sd)
-            env_key = "METACOG_TRUST_ROOT_STRICT"
+            env_key = "METACOG_TRUST_ROOT_LENIENT"
             orig = _os.environ.get(env_key)
             def setenv(v):
                 if v is None:
@@ -2101,36 +2137,39 @@ def test_c10_gate_helper_truthtable():
                     _os.environ[env_key] = v
             try:
                 setenv(None)
+                # 未建基线：临时移除 integrity.json 模拟全新部署
+                _integ = st.integrity
+                _saved = _integ.read_bytes() if _integ.exists() else None
+                if _saved is not None:
+                    _integ.unlink()
                 r.add("无 integrity.json → 不强制(未建基线)",
                       metacog._script_integrity_drift_if_enforced(st) == (False, []))
-                st.record_script_integrity()
-                r.add("有基线无漂移未强制 → (False, [])",
-                      metacog._script_integrity_drift_if_enforced(st) == (False, []))
+                if _saved is not None:
+                    _integ.write_bytes(_saved)
+                r.add("有基线无漂移 → (True, [])（默认强制，无漂移不阻断）",
+                      metacog._script_integrity_drift_if_enforced(st) == (True, []))
                 _c10_inject_drift(st)
-                r.add("漂移 + 未强制 → (False, [])（不误伤）",
+                _enf, _drift = metacog._script_integrity_drift_if_enforced(st)
+                r.add("漂移 + 默认强制 → (True, 非空)", _enf is True and bool(_drift))
+                setenv("1")
+                r.add("LENIENT=1 显式退出 → (False, [])",
                       metacog._script_integrity_drift_if_enforced(st) == (False, []))
                 setenv("0")
-                r.add("STRICT=0 → 不强制(truthy 旧行为已修)",
-                      metacog._script_integrity_drift_if_enforced(st) == (False, []))
-                setenv("false")
-                r.add("STRICT=false → 不强制",
-                      metacog._script_integrity_drift_if_enforced(st) == (False, []))
-                setenv("1")
-                _enf, _drift = metacog._script_integrity_drift_if_enforced(st)
-                r.add("STRICT=1 → 强制且漂移非空", _enf is True and bool(_drift))
+                _enf0, _drift0 = metacog._script_integrity_drift_if_enforced(st)
+                r.add("LENIENT=0（严格 =='1'）不豁免 → 强制且漂移非空",
+                      _enf0 is True and bool(_drift0))
                 setenv(None)
-                _enable_external(st, tmp, "oob", root_pubkey="PUB_A")
-                _enf2, _drift2 = metacog._script_integrity_drift_if_enforced(st)
-                r.add("外部锚启用 + 漂移 → 强制且漂移非空", _enf2 is True and bool(_drift2))
-                # 异常降级：external_trust_root 抛错 → 打 warn 并 (False, [])（不再静默 fail-open）
+                _enf4, _drift4 = metacog._script_integrity_drift_if_enforced(st)
+                r.add("LENIENT 撤销 → 恢复强制", _enf4 is True and bool(_drift4))
+                # H-05 重写后 helper 不再读 external_trust_root（解耦验证）：锚检测异常不影响硬闸
                 _orig_etr = st.external_trust_root
                 def _boom():
                     raise RuntimeError("boom")
                 st.external_trust_root = _boom
                 try:
                     _enf3, _drift3 = metacog._script_integrity_drift_if_enforced(st)
-                    r.add("外部锚检测异常 → 优雅降级 (False, [])（已 warn，非崩溃）",
-                          _enf3 is False and _drift3 == [])
+                    r.add("external_trust_root 异常不影响硬闸（H-05 解耦）",
+                          _enf3 is True and bool(_drift3))
                 finally:
                     st.external_trust_root = _orig_etr
             finally:
@@ -2557,7 +2596,7 @@ def test_v2811_migration_audit_hmac_coverage():
         ok8, cnt8 = st._verify_migration_audit()
         r.add("C-10 v2.11.0 旧版无 epoch 链(结构合法) → fail-closed ok=False [H-C 收口]", ok8 is False and cnt8 == 2)
         # 过渡演示（cutoff 覆盖为 (2,17)，模拟截止期前版本）
-        ok8t, cnt8t = st._verify_migration_audit(cutoff=(2, 26))
+        ok8t, cnt8t = st._verify_migration_audit(cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1))
         r.add("C-10 截止期前(cutoff=2,23) 旧链仍容忍 ok=True（过渡演示）", ok8t is True and cnt8t == 2)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -2606,9 +2645,11 @@ def test_v2811_integrity_chain_ok_guard():
         chain.write_text("garbage-line\n" + chain.read_text(), encoding="utf-8")
         r.add("D-3 非法 JSON 行 → 不抛异常且 False", st._integrity_chain_ok("k", "h2") is False)
 
-        # 空链文件 → True（向后兼容，v2.5.8 前无链）
+        # 空链文件 → False（v2.25.20 H-2 收口：原 v2.7.0 向后兼容 return True 被
+        # Hermes 四轮实测利用——删链即永久关闭链校验且无痕；现 fail-closed，
+        # legacy 老基线须显式 METACOG_ALLOW_LEGACY_NO_CHAIN=1 放行）
         chain.write_text("", encoding="utf-8")
-        r.add("D-3 空链文件 → True(向后兼容)", st._integrity_chain_ok("k", "h2") is True)
+        r.add("D-3 空链文件 → False(v2.25.20 fail-closed)", st._integrity_chain_ok("k", "h2") is False)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return r
@@ -2727,10 +2768,11 @@ def test_legacy_window_governance():
 
 
 def test_c11_default_failclosed_and_optout():
-    """v2.8.2 C-11 硬化（默认 fail-closed）：默认（无 METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR）下，
-    未启用外部锚(legacy) → build_trust_root 返 DenyTrustRoot('external-anchor-required')（fail-closed 默认）。
-    - ① 默认（撤销全局逃生舱）+ 空目录 legacy → DenyTrustRoot('external-anchor-required')。
-    - ② 设逃生舱 METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1 → legacy 回落 None（向后兼容逃生舱生效）。
+    """v2.8.2 C-11 硬化 → v2.27.17（C-01 专项 H-01 删除更新语义）：未启用外部锚(legacy) →
+    build_trust_root 恒返 DenyTrustRoot('external-anchor-required')（fail-closed 默认）。
+    - ① 默认 + 空目录 legacy → DenyTrustRoot('external-anchor-required')。
+    - ② 设 METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1 → **无效（no-op）**：逃生舱已删除，
+      一律仍 DenyTrustRoot（该 env 曾是 H-05 硬闸的旁路入口，随削弱链一并封死）。
     - ③ 已启用外部锚（真实离线根公钥）→ 正常 provider（不被默认 deny 误伤）。"""
     r = T()
     env_key = "METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR"
@@ -2744,11 +2786,13 @@ def test_c11_default_failclosed_and_optout():
         r.add("默认(无逃生舱) + legacy空目录 → DenyTrustRoot(required)",
               root is not None and root.name == "deny"
               and getattr(root, "reason", "") == "external-anchor-required")
-        # ② 逃生舱：显式允许 legacy → 回落 None（向后兼容）
+        # ② 逃生舱已删除（v2.27.17 H-01）：设 env 不再有任何效果 → 仍 DenyTrustRoot
         _os.environ[env_key] = "1"
         cfg_l = trust_root.TrustRootConfig.load(td)
         root_l = trust_root.build_trust_root(cfg_l)
-        r.add("逃生舱 ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1 → legacy 回落 None", root_l is None)
+        r.add("ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1 已无效（no-op）→ 仍 DenyTrustRoot(required)",
+              isinstance(root_l, trust_root.DenyTrustRoot)
+              and getattr(root_l, "reason", "") == "external-anchor-required")
         # ④ 严格 == "1" 判定（Hermes v2.8.2 高-1 回归）：非 "1" 值（如 "0"/"false"/"off"）不得解除强制力
         _os.environ[env_key] = "0"
         cfg_z = trust_root.TrustRootConfig.load(td)

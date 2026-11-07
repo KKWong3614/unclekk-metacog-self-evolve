@@ -29,6 +29,8 @@ except (AttributeError, ValueError):
     pass
 
 sys.path.insert(0, str(Path(__file__).parent))
+# v2.27.19（N-3）：冻结链密钥 env-only（C-01 同源）——standalone 运行自带测试密钥
+os.environ.setdefault("METACOG_TRUST_ROOT_ANCHOR_KEY", "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5")
 import freeze as freeze_mod
 
 _TMP = Path(tempfile.mkdtemp(prefix="metacog_v2170_"))
@@ -118,16 +120,42 @@ def test_h3_allow_reset_without_token_refused():
 
 
 def test_h3_allow_reset_with_token_succeeds():
-    """H-3c：ALLOW_RESET=1 + 正确 METACOG_FREEZE_RESET_TOKEN，重置门正常授权（证明令牌门可用）。"""
+    """H-3c：ALLOW_RESET=1 + 双 env 令牌成对一致（v2.27.17 M-03），重置门正常授权（证明令牌门可用）。"""
     r = T()
     _simulate_reset_blocked_state()
     with _Env(METACOG_FREEZE_ALLOW_MISSING=None, METACOG_FREEZE_ALLOW_RESET="1",
-              METACOG_FREEZE_RESET_TOKEN=freeze_mod._RESET_TOKEN):
+              METACOG_FREEZE_RESET_TOKEN="metacog-test-reset-token",
+              METACOG_FREEZE_RESET_TOKEN_EXPECTED="metacog-test-reset-token"):
         f = _TMP / "frozen_sample.py"
         f.write_text("reset content\n", encoding="utf-8")
         rc = freeze_mod.record(["frozen_sample.py"])
-        r.add("ALLOW_RESET=1 + 正确令牌 → 重置授权成功（rc>=0）", rc >= 0, "rc={}".format(rc))
+        r.add("ALLOW_RESET=1 + 成对一致令牌 → 重置授权成功（rc>=0）", rc >= 0, "rc={}".format(rc))
     r.add("重置成功后账本已创建", freeze_mod.FREEZE_FILE.exists())
+    return r
+
+
+def test_h3_m03_token_without_expected_refused():
+    """M-03（v2.27.17）：只提供 METACOG_FREEZE_RESET_TOKEN 而缺 _EXPECTED → REFUSED（fail-closed）。"""
+    r = T()
+    _simulate_reset_blocked_state()
+    with _Env(METACOG_FREEZE_ALLOW_MISSING=None, METACOG_FREEZE_ALLOW_RESET="1",
+              METACOG_FREEZE_RESET_TOKEN="metacog-test-reset-token",
+              METACOG_FREEZE_RESET_TOKEN_EXPECTED=None):
+        rc = freeze_mod.record(["frozen_sample.py"])
+        r.add("缺 _EXPECTED → 仍被 RESET-BLOCKED 拒绝（rc<0）", rc < 0, "rc={}".format(rc))
+    r.add("拒绝后账本未被创建", not freeze_mod.FREEZE_FILE.exists())
+    return r
+
+
+def test_h3_m03_token_mismatch_refused():
+    """M-03（v2.27.17）：提供值与期望值不一致 → REFUSED（恒定时间比对 fail-closed）。"""
+    r = T()
+    _simulate_reset_blocked_state()
+    with _Env(METACOG_FREEZE_ALLOW_MISSING=None, METACOG_FREEZE_ALLOW_RESET="1",
+              METACOG_FREEZE_RESET_TOKEN="metacog-test-reset-token",
+              METACOG_FREEZE_RESET_TOKEN_EXPECTED="another-expected-value"):
+        rc = freeze_mod.record(["frozen_sample.py"])
+        r.add("令牌不一致 → 仍被 RESET-BLOCKED 拒绝（rc<0）", rc < 0, "rc={}".format(rc))
     return r
 
 
@@ -196,6 +224,8 @@ def main():
     results.append(test_h3_allow_missing_no_longer_bypasses_reset_block())
     results.append(test_h3_allow_reset_without_token_refused())
     results.append(test_h3_allow_reset_with_token_succeeds())
+    results.append(test_h3_m03_token_without_expected_refused())
+    results.append(test_h3_m03_token_mismatch_refused())
     results.append(test_h3_first_init_without_any_env_allowed())
     results.append(test_l2_frontmatter_anchored_version_and_warn())
     results.append(test_m6_legacy_cutoff_is_3tuple())

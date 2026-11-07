@@ -97,7 +97,7 @@ def test_verdict_promote():
         out = buf.getvalue()
 
         t.add("verdict PROMOTE 输出", "PROMOTE" in out, "out 含 PROMOTE")
-        t.add("条目转 active", "status:active" in st.artifact_path("A2").read_text(), "R-001 转 active")
+        t.add("条目转 active", "status:active" in st.artifact_path("A2").read_text(encoding="utf-8"), "R-001 转 active")
         t.add("基线上移", st.get_ratchet()["baseline_utility"] > 0.6,
               "新基线={:.4f}".format(st.get_ratchet()["baseline_utility"]))
         t.add("提案状态 promoted", st.proposals()[0]["status"] == "promoted", "status=promoted")
@@ -137,7 +137,7 @@ def test_verdict_revert():
         out = buf.getvalue()
 
         t.add("verdict REVERT 输出", "REVERT" in out, "out 含 REVERT")
-        t.add("条目被回滚移除", "R-002" not in st.artifact_path("A2").read_text(), "R-002 已移除")
+        t.add("条目被回滚移除", "R-002" not in st.artifact_path("A2").read_text(encoding="utf-8"), "R-002 已移除")
         t.add("提案状态 reverted", st.proposals()[0]["status"] == "reverted", "status=reverted")
         t.add("负样本入 archive", len(metacog.read_jsonl(st.archive)) >= 1,
               "archive 记录 {}".format(len(metacog.read_jsonl(st.archive))))
@@ -155,7 +155,7 @@ def test_apply_requires_human_rejected():
              "artifact": "A2", "op": "add", "content": "- 高风险规则", "reason": "删除测试",
              "entry_id": None}
         metacog.write_json(st.quarantine / "P-needhuman.json", p)
-        before = st.artifact_path("A2").read_text() if st.artifact_path("A2").exists() else ""
+        before = st.artifact_path("A2").read_text(encoding="utf-8") if st.artifact_path("A2").exists() else ""
 
         buf = io.StringIO()
         old = sys.stdout
@@ -166,7 +166,7 @@ def test_apply_requires_human_rejected():
 
         t.add("apply 拒绝无确认（非TTY）", "人类确认闸" in out, "输出提示需 TTY 签名")
         t.add("提案保持 gated", st.proposals()[0]["status"] == "gated", "状态未推进")
-        after = st.artifact_path("A2").read_text() if st.artifact_path("A2").exists() else ""
+        after = st.artifact_path("A2").read_text(encoding="utf-8") if st.artifact_path("A2").exists() else ""
         t.add("未写入制品", before == after, "A2 内容未变")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -209,7 +209,7 @@ def test_apply_requires_human_ok():
         sys.stdout = old
 
         t.add("apply 带有效签名成功", st.proposals()[0]["status"] == "trial", "状态转 trial")
-        t.add("条目写入 A2", "高风险规则已确认" in st.artifact_path("A2").read_text(), "内容已落盘")
+        t.add("条目写入 A2", "高风险规则已确认" in st.artifact_path("A2").read_text(encoding="utf-8"), "内容已落盘")
         # W1 受信任锚内嵌人类签名（关闭 7.1 直写伪造）
         applied_rec = st.latest_apply_record("P-human-ok")
         t.add("受信任锚含人类签名", bool(applied_rec and applied_rec.get("human_sig")), "anchor sig")

@@ -4,6 +4,13 @@
 import json
 import shutil
 import sys
+# v2.27.36 F2'：locale 鲁棒化（默认 cp936 控制台不因 ✅/❌ 崩溃）
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path

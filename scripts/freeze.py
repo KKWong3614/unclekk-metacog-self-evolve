@@ -13,16 +13,20 @@ v2.16.0（Hermes r10/r11/r12 复派 P1/P2 收口）：测试/源冻结清单 —
 v2.13.0 收口 Hermes r9 高绕过（H-B1/H-B2/H-B3/H-B4，见 v2.13.0 注释）。
 
 v2.14.0 收口 Hermes r10 P1/P2（诚实威胁模型：防「仅持技能树写权」的篡改；持 ledger+锚 双写权=已破信任根，属已知 residual）：
-  - [P1-3 HIGH] anchor-init 加授权门禁：必须携带 METACOG_ANCHOR_INIT_TOKEN（与代码内 _ANCHOR_INIT_TOKEN 一致），
-              否则 fail-closed 拒绝（返回 2）。封堵「同用户跑一次 anchor-init 洗白任意 ledger 篡改」——r10 新增最高危发现。
+  - [P1-3 HIGH] anchor-init 加授权门禁：必须携带 METACOG_ANCHOR_INIT_TOKEN，否则 fail-closed 拒绝（返回 2）。
+              封堵「同用户跑一次 anchor-init 洗白任意 ledger 篡改」——r10 新增最高危发现。
               anchor-init 同时写入审计日志（时间戳 + uid）。
+              v2.27.17（M-03 收口）：令牌不再存于代码字面量，改双 env 比对（提供值 vs 期望值，均不落源码）。
   - [P1-2 HIGH] 新增安装状态标记 FROZEN_STATE marker（落在树外，与锚同目录）：
               record() bootstrap 分支：账本+锚 双删 但 marker 仍在 → FROZEN-RESET-BLOCKED fail-closed
               （除非 METACOG_FREEZE_ALLOW_RESET=1 且 METACOG_FREEZE_RESET_TOKEN 正确），封堵「删账本+删锚 后静默 re-init」孪生绕过。marker 缺失才允许首次全新初始化。
               v2.17.0（Hermes r13 H-3 收口）：重置门须令牌授权，METACOG_FREEZE_ALLOW_MISSING 不再能绕过 RESET-BLOCKED。
-  - [P1-1 诚实披露] 明确 HMAC 链密钥为代码内派生常量（_FREEZE_KEY_SEED + _FREEZE_HMAC_LABEL）⇒ 对同用户/持代码读权攻击者
+  - [P1-1 诚实披露（v2.14.0 原文）] 明确 HMAC 链密钥为代码内派生常量（旧常量种子 + _FREEZE_HMAC_LABEL）⇒ 对同用户/持代码读权攻击者
               零密码学保护（可读源码重算密钥伪造整条链）；唯一真正防御 tree-only 篡改的是**树外锚点**（攻击者不可写，
               声称「防仅持技能树写权」即指此）。威胁模型已在 SKILL.md §威胁模型 完整登记，不再混同 HMAC 链与锚点保护强度。
+              （v2.27.19 N-3 收口：旧常量种子已删除，披露转为历史记录，见下方 v2.14.0 P1-1 → v2.27.19 更新块。）
+              v2.27.19（N-3 收口）：常量链密钥已删除，改由部署专属 env 锚密钥派生（与账本签名锚同源，C-01 口径）——
+              上述「可读源码重算密钥」残余闭合（新口径：须知部署 env 密钥方可伪造链）；env 对本进程可读属部署契约残余（同 C-01）。
   - [P1-4] 树外锚点写后落只读属性（Windows FILE_ATTRIBUTE_READONLY / POSIX 0444）；写前先解除（_unprotect/_protect）。
               ledger 位于技能树内（tree-only 攻击者本就可写），按设计不落只读，仅锚点（信任根）落只读。
   - [P2-5] _parse_chain 增加 ledger schema 白名单校验（字段集合/类型/HMAC·sha256 长度 64 hex/prev_hmac 格式/path 相对路径无 .. 逃逸）。
@@ -60,7 +64,7 @@ v2.16.0 收口 Hermes r12 独立复现实测发现（HIGH-1 / HIGH-2 / MED-2 / L
 零第三方依赖。用法：
     python freeze.py record <rel-path> [<rel-path> ...]   # 追加冻结条目（写前门禁校验 + 自动维护锚/标记）
     python freeze.py verify                              # 校验全部冻结项 + ledger 完整性 + 树外锚点
-    python freeze.py anchor-init                         # 特权恢复操作：显式重建树外锚点（需 METACOG_ANCHOR_INIT_TOKEN）
+    python freeze.py anchor-init                         # 特权恢复操作：显式重建树外锚点（需 METACOG_ANCHOR_INIT_TOKEN 与 _EXPECTED 成对一致）
 """
 import argparse
 import getpass
@@ -83,35 +87,62 @@ SKILL_ROOT = Path(__file__).resolve().parent.parent
 FREEZE_FILE = SKILL_ROOT / "frozen-hashes.jsonl"
 
 # v2.11.0（H-A）：冻结 ledger 的 HMAC 派生标签（与基线签名/审计链 HMAC 标签分离，单钥双用防护）。
-# 【诚实披露 v2.14.0 P1-1】：冻结 ledger 是**开发/发布期卫生工具**，非运行期安全边界——
-# 其 HMAC 密钥为代码内派生常量（见 _freeze_key），任何能读到本源码的同用户进程都能重算密钥、
-# 伪造整条 HMAC 链。因此 HMAC 链对「同用户 / 持代码读权」攻击者**零密码学保护**，仅提供：
+# 【诚实披露 v2.14.0 P1-1 → v2.27.19（N-3 收口）更新】：冻结 ledger 是**开发/发布期卫生工具**，
+# 非运行期安全边界。v2.14.0-v2.27.18 期间其 HMAC 密钥为代码内派生常量（旧常量种子，名从历史），
+# 对「同用户 / 持代码读权」攻击者零密码学保护——该残余**已于 v2.27.19 删除**：链密钥改由
+# 部署专属锚密钥（env METACOG_TRUST_ROOT_ANCHOR_KEY，与账本签名锚同源，C-01 口径）派生，
+# 未配置 / 非法 → record/verify 全拒（宁可装不上）。仍提供的保护：
 #   (a) 意外损坏的检出；
 #   (b) 与「树外锚点」配合，在 tree-only 攻击者（可写技能树、不可写树外锚）篡改 ledger 时，
 #       因锚不匹配而 fail-closed（真正有效的隔离是树外锚点，而非 HMAC 链）。
-# 真正的防篡改由「首次冻结哈希为权威 + 旧哈希永覆写」语义 + 树外锚点共同保证。
+#   (c) v2.27.19 起追加：链密钥部署专属化——持代码读权但不知部署 env 密钥者无法伪造 HMAC 链。
+# 诚实边界（同 C-01）：env 密钥对本进程自身可读属部署契约；真正防篡改由「首次冻结哈希为权威
+# + 旧哈希永覆写」语义 + 树外锚点共同保证。
 _FREEZE_HMAC_LABEL = b"metacog-freeze-v211"
-_FREEZE_KEY_SEED = b"unclekk-metacog-self-evolve-freeze-ledger-const"
+# v2.27.19（N-3 收口）：原代码常量种子已删除（源码卫生断言守卫：本文件全文不得再出现该常量名，
+# 见 test-c01-no-default-anchor.py）。
 
-# v2.14.0（P1-3）：anchor-init 授权令牌（代码内派生常量，防御纵深——非密码学根，
-# 仅用于强制「特权恢复」必须显式 opt-in，阻止无令牌的自动化/误调用洗白篡改）。
-# v2.18.0（Hermes r14 F-9 收口）：去掉版本数字标签，改用语义名——避免每次发版都要同步
-# 两处令牌字面量（此前 _ANCHOR_INIT_TOKEN 标 v2140 而 _RESET_TOKEN 标 v2170，标签漂移）。
-_ANCHOR_INIT_TOKEN = "METACOG-ANCHOR-INIT-REQUIRED"
+# v2.14.0（P1-3）：anchor-init 授权令牌（防御纵深——非密码学根，仅用于强制「特权恢复」必须显式
+# opt-in，阻止无令牌的自动化/误调用洗白篡改）。
+# v2.27.17（C-01 专项 M-03 收口）：特权令牌**不再存于代码字面量**——原 `_ANCHOR_INIT_TOKEN` 与
+# `_RESET_TOKEN` 两处明文常量对任何能读到源码（含 SKILL.md 引用）的进程等同公开，门禁形同虚设。改为**双 env 比对**：
+# 调用方须同时提供 `METACOG_ANCHOR_INIT_TOKEN`（提供值）与 `METACOG_ANCHOR_INIT_TOKEN_EXPECTED`
+# （期望值，部署方私下保管），两者恒定时间比对一致才放行；**无 EXPECTED → REFUSED（fail-closed）**。
+# 提供值与期望值均不落源码，读源码不再等于持令牌（威胁模型收口至「读部署环境」）。
+# 重置门同理：`METACOG_FREEZE_RESET_TOKEN` vs `METACOG_FREEZE_RESET_TOKEN_EXPECTED`。
 
-# v2.17.0（Hermes r13 H-3 收口）：冻结态重置授权令牌（与 _ANCHOR_INIT_TOKEN 同性质——代码内派生常量、
-# 防御纵深、非密码学根）。v2.16.0 及之前 `record()` 的 RESET-BLOCKED 门仅由裸环境变量
-# `METACOG_FREEZE_ALLOW_RESET=1` 字符串比较打开（无任何令牌校验），等价于「export 一行即绕过全部冻结保护」。
-# 本版起：重置门必须同时满足 `METACOG_FREEZE_ALLOW_RESET=1` 且 `METACOG_FREEZE_RESET_TOKEN == _RESET_TOKEN`，
-# 与 anchor-init 的令牌门对齐——消除裸环境变量逃生舱。注意：令牌为代码常量，对「持源码读权」的同用户仍属防御纵深
-# （非密码学根），此威胁模型已在 SKILL.md §4 诚实登记（residual ②同类），非代码层可防。
-# v2.18.0（Hermes r14 F-9 收口）：与 _ANCHOR_INIT_TOKEN 一致去掉版本数字标签，两令牌标签统一、不再随版本漂移。
-_RESET_TOKEN = "METACOG-FREEZE-RESET-REQUIRED"
+
+def _token_pair_ok(provided_env: str, expected_env: str) -> bool:
+    """v2.27.17（M-03）：特权令牌双 env 恒定时间比对。无期望值或无提供值 → False（fail-closed）。"""
+    provided = os.environ.get(provided_env)
+    expected = os.environ.get(expected_env)
+    if not expected or not provided:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
 def _freeze_key():
-    """v2.14.0 诚实披露：密钥 = HMAC(种子, 标签)，为代码内常量；同用户可读源码重算。"""
-    return hmac.new(_FREEZE_KEY_SEED, _FREEZE_HMAC_LABEL, hashlib.sha256).digest()
+    """v2.14.0：密钥 = HMAC(种子, 标签) → v2.27.19（N-3 收口）：链密钥改由**部署专属锚密钥**派生
+    （env METACOG_TRUST_ROOT_ANCHOR_KEY，与账本签名锚同源——C-01 口径：信任根不由被约束方持有）。
+
+    - env 未配置 → RuntimeError（fail-closed，record/verify 全拒，宁可装不上）。
+    - env 非法 base64 / <32 字节 → ValueError 透传（M-01，trust_root.get_anchor_key）。
+    - 诚实边界：env 对本进程可读属部署契约（同 C-01，非代码层可防）。
+    - 迁移：旧常量种子签署的存量账本在新口径下链校验必失败（fail-closed）→
+      须配置专属密钥后经授权重置门重新 record 建立基线（一次性破坏性迁移）。"""
+    try:
+        import trust_root
+    except (ImportError, ModuleNotFoundError):
+        raise RuntimeError(
+            "trust_root 模块缺失，冻结链密钥无法派生（v2.27.19 N-3 收口：代码常量链密钥已删除，"
+            "无任何兜底）——请恢复 trust_root.py（与 freeze.py 同目录）。")
+    _anchor = trust_root.get_anchor_key()
+    if _anchor is None:
+        raise RuntimeError(
+            "冻结链密钥未配置（v2.27.19 N-3 收口：代码常量链密钥已删除，与账本签名锚同源）。\n"
+            "请设置环境变量 METACOG_TRUST_ROOT_ANCHOR_KEY 为 base64 编码的 ≥32 字节专属随机密钥；"
+            "既有冻结账本须在配置后经授权重置门重新 record 建立基线。")
+    return hmac.new(_anchor, _FREEZE_HMAC_LABEL, hashlib.sha256).digest()
 
 
 def _hash_file(path: Path) -> str:
@@ -128,19 +159,56 @@ def _now_iso():
 
 # ───────────────────────── 树外锚点 + 安装标记 + 只读保护 ─────────────────────────
 
+def _freeze_slug():
+    """v2.27.35（R2-N-5 收口）：树外锚命名 slug = 「目录名--规范路径哈希前12位」。
+    与 metacog._attest_slug 有意镜像（跨模块一致性由 test-v22735-n5-anchor-slug.py 断言）。
+    v2.27.34 及以前为纯目录名——同机同名根目录实例互相覆盖树外锚（R2-N-5，Low）。"""
+    import hashlib as _h
+    canon = os.path.normcase(str(SKILL_ROOT.resolve()))
+    return "{}--{}".format(SKILL_ROOT.name, _h.sha256(canon.encode("utf-8")).hexdigest()[:12])
+
+
+def _anchor_write_path() -> Path:
+    """v2.27.35（R2-N-5）：树外锚**写**路径——永远新命名，绝不写 legacy（否则迁移永不前进）。
+    METACOG_FREEZE_ANCHOR env 显式覆盖时仍按 env（用户自命名，无碰撞问题）。"""
+    env = os.environ.get("METACOG_FREEZE_ANCHOR")
+    if env:
+        p = Path(env).resolve()
+        _reject_in_tree_anchor(p)
+        return p
+    return Path.home() / ".metacog_freeze_anchors" / (_freeze_slug() + ".anchor")
+
+
 def _anchor_path() -> Path:
-    """树外锚点路径。可用 METACOG_FREEZE_ANCHOR 覆盖（如 CI 只读产物）。默认落在用户主目录（树外）。"""
+    """树外锚点**读**路径（v2.27.35 R2-N-5 迁移）：新命名优先；缺失且 legacy（纯目录名）
+    锚绑定本实例时回退。绑定判据 = legacy 锚内容 == 当前账本 commitment
+    （锚内容即 commitment，见 _write_anchor_with 调用处）——账本已变则不回退（fail-closed，
+    须授权重 record 完成迁移）。**写路径请用 _anchor_write_path，勿用本函数。**"""
     env = os.environ.get("METACOG_FREEZE_ANCHOR")
     if env:
         p = Path(env).resolve()  # resolve() 解引用符号链接——symlink 指向树内也会被下方 _reject_in_tree_anchor 拒绝（v2.14.0 P2-7）
         _reject_in_tree_anchor(p)
         return p
-    return Path.home() / ".metacog_freeze_anchors" / (SKILL_ROOT.name + ".anchor")
+    newp = _anchor_write_path()
+    try:
+        if newp.exists():
+            return newp
+    except OSError:
+        return newp
+    legacy = newp.parent / (SKILL_ROOT.name + ".anchor")
+    if legacy.exists():
+        try:
+            if legacy.read_text(encoding="utf-8").strip() == _ledger_commitment():
+                return legacy
+        except Exception:
+            pass
+    return newp
 
 
 def _marker_path() -> Path:
-    """v2.14.0（P1-2）：安装状态标记，与锚同目录（树外）。存在 = 本技能曾经初始化冻结态。"""
-    return _anchor_path().parent / (SKILL_ROOT.name + ".installed")
+    """v2.14.0（P1-2）→ v2.27.35（R2-N-5）：安装状态标记（树外，锚同目录）。
+    **写**路径用新命名 slug；读经 _read_marker 做 legacy 存在性回退（保守）。"""
+    return _anchor_write_path().parent / (_freeze_slug() + ".installed")
 
 
 def _reject_in_tree_anchor(p: Path):
@@ -156,7 +224,14 @@ def _reject_in_tree_anchor(p: Path):
 
 
 def _read_marker() -> bool:
-    return _marker_path().exists()
+    # v2.27.35（R2-N-5）：新命名 OR legacy 命名任一存在即视为已安装（存在性保守判定，
+    # 与 metacog._anchor_trace_exists 同口径——宁误报不漏报）。
+    try:
+        if _marker_path().exists():
+            return True
+        return (_anchor_write_path().parent / (SKILL_ROOT.name + ".installed")).exists()
+    except OSError:
+        return False
 
 
 def _ledger_commitment() -> str:
@@ -193,7 +268,7 @@ def _protect(p: Path):
 def _audit_log(action: str, outcome: str, detail: str = ""):
     """v2.14.0（P1-3）：特权操作审计日志（时间戳 + uid），落树外锚同目录。失败静默忽略。"""
     try:
-        p = _anchor_path().parent / (SKILL_ROOT.name + ".audit.log")
+        p = _anchor_write_path().parent / (_freeze_slug() + ".audit.log")
         p.parent.mkdir(parents=True, exist_ok=True)
         try:
             uid = getpass.getuser()
@@ -212,8 +287,9 @@ def _audit_log(action: str, outcome: str, detail: str = ""):
 
 def _write_anchor_with(content: str):
     """v2.21.0（r17 M-新-1 收口·重构）：以指定内容写树外锚（原子替换 + 落只读）。
-    供 _write_anchor() 正常写入，以及 record() 回滚时还原覆盖前锚内容复用。"""
-    p = _anchor_path()
+    供 _write_anchor() 正常写入，以及 record() 回滚时还原覆盖前锚内容复用。
+    v2.27.35（R2-N-5）：**写走 _anchor_write_path（新命名）**，绝不写 legacy。"""
+    p = _anchor_write_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     # v2.20.0（r16 I-1 收口）：改用 tempfile 生成随机临时文件名，消除可预测 `.tmp` 名带来的并发竞态窗口。
     with tempfile.NamedTemporaryFile(dir=str(p.parent), delete=False, suffix=".tmp") as tf:
@@ -248,10 +324,15 @@ def _read_anchor():
 
 
 def _remove_anchor():
-    """v2.14.0：解除只读后删除锚（供测试/显式重置使用）。"""
-    p = _anchor_path()
-    _unprotect(p)
-    p.unlink(missing_ok=True)
+    """v2.14.0：解除只读后删除锚（供测试/显式重置使用）。
+    v2.27.35（R2-N-5）：新旧命名都清（legacy 残留会令读回退复活旧锚）。"""
+    for p in (_anchor_write_path(),
+              _anchor_write_path().parent / (SKILL_ROOT.name + ".anchor")):
+        try:
+            _unprotect(p)
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _write_marker():
@@ -271,7 +352,12 @@ def _write_marker():
 
 
 def _remove_marker():
+    # v2.27.35（R2-N-5）：新旧命名都清（legacy 残留会令 _read_marker 误报已安装）
     _marker_path().unlink(missing_ok=True)
+    try:
+        (_anchor_write_path().parent / (SKILL_ROOT.name + ".installed")).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 # ───────────────────────── ledger 解析 / schema 校验 / HMAC 链 ─────────────────────────
@@ -341,7 +427,11 @@ def _valid_entry(e) -> "tuple[bool, str]":
 
 def _parse_chain(lines):
     """解析并校验 HMAC 链（ledger 已被判存在且非空）。返回 (ok, violations, entries)。"""
-    key = _freeze_key()
+    try:
+        key = _freeze_key()
+    except RuntimeError as _e:
+        # v2.27.19（N-3 收口）：链密钥未配置/模块缺失 → 显式 violation（fail-closed，不裸 traceback）
+        return False, ["FROZEN-KEY: {}".format(_e)], []
     prev = ""
     entries = []
     for ln in lines:
@@ -400,7 +490,8 @@ def _file_drift_violations(entries):
             # 而是登记一条违规并跳过（与 record() 路径的 MED-2 修复对齐，杜绝「修 A 忘 B」复发）。
             viol.append("FROZEN-READ-ERROR: {}（无法读取冻结文件：{}）".format(p, ex))
             continue
-        if cur != canon[p]:
+        # v2.27.15（L-07）：哈希比较改 hmac.compare_digest
+        if not hmac.compare_digest(cur, canon[p]):
             viol.append("FROZEN-MODIFIED: {}（首次冻结={} 当前={}）".format(p, canon[p], cur))
         if seen[p] > 1:
             viol.append("RE-FROZEN: {} 在初次冻结后被再次冻结 {} 次（纪律告警：冻结后被改并重冻）"
@@ -466,14 +557,17 @@ def record(rel_paths):
             return -1
         # 账本缺失 + 锚缺失：进一步区分首次安装 vs 清空重置
         if _read_marker():
-            # v2.17.0（H-3 收口）：重置门禁须 METACOG_FREEZE_ALLOW_RESET=1 且令牌 METACOG_FREEZE_RESET_TOKEN == _RESET_TOKEN，
+            # v2.17.0（H-3 收口）：重置门禁须 METACOG_FREEZE_ALLOW_RESET=1 且重置令牌校验通过，
             # 不再是裸环境变量字符串比较（杜绝 `export METACOG_FREEZE_ALLOW_RESET=1` 单行绕过全部冻结保护）。
+            # v2.27.17（M-03）：令牌改双 env 比对（METACOG_FREEZE_RESET_TOKEN vs
+            # METACOG_FREEZE_RESET_TOKEN_EXPECTED，恒定时间；无 EXPECTED → REFUSED）。
             allow_reset = os.environ.get("METACOG_FREEZE_ALLOW_RESET") == "1"
-            reset_token = os.environ.get("METACOG_FREEZE_RESET_TOKEN")
-            if not (allow_reset and reset_token == _RESET_TOKEN):
+            if not (allow_reset and _token_pair_ok("METACOG_FREEZE_RESET_TOKEN",
+                                                   "METACOG_FREEZE_RESET_TOKEN_EXPECTED")):
                 print("[REFUSED] record 被拒绝：安装标记存在但账本+锚均缺失，疑似冻结态被清空重置"
                       "（FROZEN-RESET-BLOCKED）。请恢复冻结态，或带 METACOG_FREEZE_ALLOW_RESET=1 "
-                      "且正确的 METACOG_FREEZE_RESET_TOKEN 显式授权重置。")
+                      "且 METACOG_FREEZE_RESET_TOKEN / METACOG_FREEZE_RESET_TOKEN_EXPECTED "
+                      "成对一致的令牌显式授权重置。")
                 _audit_log("record", "REFUSED", "reset-blocked(marker-present)")
                 return -1
         # 首次全新初始化（marker 缺失）或显式令牌授权重置
@@ -485,7 +579,29 @@ def record(rel_paths):
                 print("  - " + v)
             return -1
 
-    key = _freeze_key()
+    # v2.27.31（R-4）：C-1 信任根完整性门禁——attestation 层已钉固时，record 须先确认信任根完好
+    # （树外公钥/attestation 存在、外部根锚**签名密封**有效且与钉固一致、attestation 未过期）。
+    # 刻意不要求 commitment 匹配（record 的用途就是重写被跟踪文件，必然使旧 commitment 失配）；
+    # 安全闭环 = record 后 attestation 仍失配 → 受控命令 fail-closed → 须离线重签。
+    try:
+        import metacog as _mc
+        _ok_root, _viol = _mc._attest_root_integrity(_mc.Store(SKILL_ROOT))
+        if not _ok_root:
+            print("[REFUSED] record 被拒绝：C-1 信任根完整性校验未通过（FROZEN-C1-ROOT-BLOCKED）：")
+            for _v in _viol:
+                print("  - " + str(_v))
+            print("  须先修复信任根（重装 attestation 层 / 由持离线私钥的一方重新密封）再重基线。")
+            _audit_log("record", "REFUSED", "c1-root-integrity")
+            return -1
+    except ImportError:
+        pass
+    try:
+        key = _freeze_key()
+    except RuntimeError as _e:
+        # v2.27.19（N-3 收口）：链密钥未配置/模块缺失 → REFUSED（fail-closed，不裸 traceback）
+        print("[REFUSED] record 被拒绝：{}".format(_e))
+        _audit_log("record", "REFUSED", "freeze-key-unconfigured")
+        return -1
     lines = _load_lines()
     prev = ""
     if lines:
@@ -576,12 +692,14 @@ def record(rel_paths):
 
 def anchor_init():
     """v2.14.0（P1-3）：特权恢复操作——显式建立/重建信任根（树外锚点）。
-    必须携带 METACOG_ANCHOR_INIT_TOKEN（值需等于代码内 _ANCHOR_INIT_TOKEN），否则 fail-closed 拒绝（返回 2）。
+    v2.27.17（M-03）：令牌改双 env 比对——须同时提供 METACOG_ANCHOR_INIT_TOKEN（提供值）与
+    METACOG_ANCHOR_INIT_TOKEN_EXPECTED（期望值，部署方私下保管，不落源码），恒定时间一致才放行；
+    缺一或错配 → fail-closed 拒绝（返回 2）。
     封堵「同用户跑一次 anchor-init 洗白任意 ledger 篡改」。要求 ledger 存在且结构校验通过（不含锚检查，因锚正被建立）。"""
-    token = os.environ.get("METACOG_ANCHOR_INIT_TOKEN")
-    if token != _ANCHOR_INIT_TOKEN:
+    if not _token_pair_ok("METACOG_ANCHOR_INIT_TOKEN", "METACOG_ANCHOR_INIT_TOKEN_EXPECTED"):
         _audit_log("anchor-init", "REFUSED", "token missing/mismatch")
-        print("[REFUSED] anchor-init 被拒绝：缺少/错误的授权令牌（METACOG_ANCHOR_INIT_TOKEN）。"
+        print("[REFUSED] anchor-init 被拒绝：缺少/错误的授权令牌"
+              "（METACOG_ANCHOR_INIT_TOKEN 与 METACOG_ANCHOR_INIT_TOKEN_EXPECTED 须成对提供且一致）。"
               "anchor-init 为特权恢复操作，非日常路径；日常 record() 已自动维护树外锚点。")
         return 2
     if not FREEZE_FILE.exists():
@@ -608,7 +726,7 @@ def anchor_init():
         return 1
     # 同步刷新安装标记
     _write_marker()
-    print("[OK] 已写入树外锚点：{}".format(_anchor_path()))
+    print("[OK] 已写入树外锚点：{}".format(_anchor_write_path()))
     _audit_log("anchor-init", "OK", "rebuilt")
     return 0
 
@@ -627,7 +745,22 @@ def main():
     if args.cmd == "verify":
         ok, viol = verify()
         if ok:
-            print("[OK] 冻结校验通过：所有冻结文件未漂移，ledger 完整，树外锚点匹配。")
+            # v2.27.15（M-03/§四.2 收口）：ALLOW_MISSING 跳过校验时不得谎报「树外锚点匹配」——
+            # 该绿灯曾被写成官方复验口径而未披露「锚点校验被跳过」，对读者而言假绿灯比不写更危险。
+            _allow_missing = os.environ.get("METACOG_FREEZE_ALLOW_MISSING") == "1"
+            _ledger_missing = not FREEZE_FILE.exists()
+            _anchor_missing = _read_anchor() is None
+            if _allow_missing and (_ledger_missing or _anchor_missing):
+                _skipped = []
+                if _ledger_missing:
+                    _skipped.append("冻结账本(ledger)缺失、未校验")
+                if _anchor_missing:
+                    _skipped.append("树外锚点缺失、未校验")
+                _ledger_part = "ledger 完整" if not _ledger_missing else "账本缺失（未校验，不声称完整）"
+                print("[OK*] 冻结文件未漂移（{}）；但{}，已按 METACOG_FREEZE_ALLOW_MISSING=1 跳过对应校验——"
+                      "本输出不构成完整锚/账本完整性证据。".format(_ledger_part, "、".join(_skipped)))
+            else:
+                print("[OK] 冻结校验通过：所有冻结文件未漂移，ledger 完整，树外锚点匹配。")
             return 0
         print("[FAIL] 冻结校验失败：")
         for v in viol:

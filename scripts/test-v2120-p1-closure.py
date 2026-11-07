@@ -9,7 +9,7 @@ v2.12.0（Hermes r8 P1 收口）对抗回归测试套件（独立验证，非自
   - H-B 复确认：移除 sig_epoch 后，缺失 _anchor_sig 的 legacy 无签名基线在 v2.12.0 仍 fail-closed。
   - H-C 复确认：旧审计链（首条缺 epoch）在 v2.12.0 仍 fail-closed。
 
-零第三方依赖。运行需 METACOG_TRUST_ROOT_ALLOW_DEFAULT=1（本文件自行 setdefault）。
+零第三方依赖。运行需专属 METACOG_TRUST_ROOT_ANCHOR_KEY（本文件自行 setdefault 测试密钥）。
 """
 import json
 import os
@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-os.environ.setdefault("METACOG_TRUST_ROOT_ALLOW_DEFAULT", "1")
+os.environ.setdefault("METACOG_TRUST_ROOT_ANCHOR_KEY", "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except (AttributeError, ValueError):

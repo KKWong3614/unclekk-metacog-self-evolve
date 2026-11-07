@@ -218,8 +218,8 @@ def test_h1_legacy_cutoff_active():
     r = T()
     r.add("v2.11.0 当前版本 _legacy_hash_allowed()==False（真实截止期已激活）",
           metacog.Store._legacy_hash_allowed() is False)
-    r.add("未来截止期（cutoff=(2, 26)，晚于当前版本）_legacy_hash_allowed()==True",
-          metacog.Store._legacy_hash_allowed(cutoff=(2, 26)) is True)
+    r.add("未来截止期（cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1)，晚于当前版本）_legacy_hash_allowed()==True",
+          metacog.Store._legacy_hash_allowed(cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1)) is True)
 
     scur = metacog.Store._hash_text("任意内容用于测试")
     stored16 = scur[:16]  # 模拟 64-bit 旧基线
@@ -263,7 +263,7 @@ def test_legacy_epoch_tolerance():
                 "prev_hmac": "", "hmac": "whatever"}
         _audit.write_text(json.dumps(_old) + "\n", encoding="utf-8")
         # 直接调用模块函数并注入 cutoff 覆盖，模拟「截止期前版本」行为
-        _ok_trans, _cnt_trans = metacog._verify_audit_chain(st, cutoff=(2, 26))
+        _ok_trans, _cnt_trans = metacog._verify_audit_chain(st, cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1))
         r.add("截止期前(cutoff=2,23) 旧链仍容忍 (True, 1)",
               _ok_trans is True and _cnt_trans == 1, "ok={} cnt={}".format(_ok_trans, _cnt_trans))
     finally:

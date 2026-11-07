@@ -55,7 +55,7 @@
 ### C1. 反复改 A2 的具体做法却无效，仍继续改 A2
 - **错误现象**：同一条规则连续 3 次 `REVERT` / 同一处改 ≥3 次，还在 `propose --artifact A2`。
 - **为什么危险**：问题在「怎么找规则」（M1），不在「规则本身」；在 A2 上打补丁只会循环失败。
-- **正确写法**：连续 3 次 REVERT / 同一处改 ≥3 次 → 改 **M1**（需 `--human-ok` 走 `confirm` 凭证化确认），不要继续在 A2 上打补丁。
+- **正确写法**：连续 3 次 REVERT / 同一处改 ≥3 次 → 改 **M1**（人类真实 TTY 运行 `apply --id <提案>` 交互式口令签绑定签名；无人值守 `confirm --sign --id <提案>` → `apply --id <提案> --sig`；`--human-ok` 旗标与 `confirm --approve` 均已废除），不要继续在 A2 上打补丁。
 - **验证命令**：`python3 "$MC" verdict --auto-m1`（连续 3 次 REVERT 时自动生成 M1 提议）；`python3 "$MC" status`（看 REVERT 计数趋势）。
 
 ### C2. 想让 A 领域规则自动套到 B 领域
@@ -123,6 +123,35 @@
 - **为什么危险**：公共 CI 无写权限/不可信，可能把未经验证的提案写进共享 `.metacog`，污染团队记忆。
 - **正确写法**：公共 CI 仅跑只读的 `gate` / `verify`；`apply` 只放在有写权限的私有 runner，且高风险改动须 `confirm` 人类确认。
 - **验证命令**：`python3 "$MC" gate`（只读校验，公共 CI 安全）；`python3 "$MC" verify`（只读完整性检查）。
+
+---
+
+## 类别七：裁决后处置失当（Post-verdict）
+
+### G1. REVERT 后不知道做什么，换个措辞原样重提
+- **错误现象**：`verdict` 裁决 `REVERT` 后，立刻把同一条规则换措辞重新 `propose`，或当作什么都没发生继续干活。
+- **为什么危险**：REVERT 说明**试用期数据不支撑该改动**（utility 掉线或 violation_rate 升）；无归因重提只会再吃一次 REVERT，并烧掉重新累计的 5 笔 episode 证据窗口。REVERT 本身是自动回滚，条目已回到改动前状态，无需手动 `rollback`。
+- **正确写法**：三步走——① **确认回滚已发生**：`status` 看双指标趋势与回滚可用性提示，`retrieve --strict` 确认生效态已不含被撤条目；② **读归因定层**：`meta-cognition.log` 记了该次裁决「为什么」，对照试用期窗口 episode（`episodes.jsonl`）定位是 utility 掉了还是 violation_rate 升了；③ **分层再行动**：内容错 → 修订内容凭新证据重新 `propose`；「找规则的方式」错 → 走下方 G2 决策树改 M1。
+- **验证命令**：`python3 "$MC" status`（双指标趋势 + 回滚可用性）；`python3 "$MC" retrieve --strict`（确认生效态）；`cat .metacog/ledger/meta-cognition.log`（读裁决归因）。
+
+### G2. 连续 3 次 REVERT：决策树
+```text
+连续 3 次 REVERT（同一规则 / 同一处改动）
+├─ 是规则内容问题（措辞 / 粒度 / 边界错）？
+│   └─ 是 → 修订内容，凭 ≥2 个新 episode 重新 propose → gate → apply（证据窗口重新累计）
+├─ 是「找规则的方式」问题（M1 元层）？
+│   └─ 是 → python3 "$MC" verdict --auto-m1   # 自动生成 M1 元层自省提议
+│         → M1 属高风险改动：人类在真实 TTY 跑 apply --id <提案>
+│           交互式输入口令当场完成签绑定签名（v2.5.7 合并方案；
+│           confirm --approve / apply --token 已于 v2.5.7 移除；无人值守
+│           走 confirm --sign 预签名 → apply --sig，v2.25.14 起）
+└─ 分不清是哪层问题？
+    └─ 先跑 status 看双指标趋势：
+       violation_rate 持平而 utility 掉 → 内容层问题；
+       violation_rate 升 → 触碰边界 / 红线邻近 → 回到内容层并对照类别四自查。
+```
+- **为什么必须升级到 M1**：在 A2 上反复打补丁是循环失败（见 C1）；M1 改的是「怎么找规则」的元层参数（`meta/M1-evolve-policy.json`），属**参数级自指**，不触碰不动点契约。判断口径见 `faq-deep.md` Q3（episodes 与 meta-log 分工）。
+- **验证命令**：`python3 "$MC" verdict --auto-m1`；`python3 "$MC" status`。
 
 ---
 

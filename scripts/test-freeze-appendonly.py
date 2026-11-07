@@ -30,6 +30,8 @@ except (AttributeError, ValueError):
 # 重定向 SKILL_ROOT 到临时目录以隔离测试（不污染真实冻结清单）
 _TMP = Path(tempfile.mkdtemp(prefix="metacog_freeze_"))
 sys.path.insert(0, str(Path(__file__).parent))
+# v2.27.19（N-3）：冻结链密钥 env-only（C-01 同源）——standalone 运行自带测试密钥
+os.environ.setdefault("METACOG_TRUST_ROOT_ANCHOR_KEY", "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5")
 import freeze as freeze_mod
 freeze_mod.SKILL_ROOT = _TMP
 freeze_mod.FREEZE_FILE = _TMP / "frozen-hashes.jsonl"

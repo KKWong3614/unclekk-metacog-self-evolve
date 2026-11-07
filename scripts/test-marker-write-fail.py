@@ -16,6 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+# v2.27.19（N-3）：冻结链密钥 env-only（C-01 同源）——standalone 运行自带测试密钥
+os.environ.setdefault("METACOG_TRUST_ROOT_ANCHOR_KEY", "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5")
 import freeze as F  # noqa: E402
 
 fails = []

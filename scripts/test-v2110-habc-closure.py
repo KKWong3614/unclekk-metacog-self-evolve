@@ -12,7 +12,7 @@ v2.11.0（H-A / H-B / H-C 收口）对抗回归测试套件（独立验证，非
     在截止期前（cutoff 覆盖 (2,19)）仍容忍（过渡语义保留）。
   - H-C 回归：旧审计链（首条缺 epoch）在 v2.11.0 须 fail-closed；截止期前（cutoff 覆盖 (2,19)）仍容忍。
 
-零第三方依赖。运行需 METACOG_TRUST_ROOT_ALLOW_DEFAULT=1（本文件自行 setdefault）。
+零第三方依赖。运行需专属 METACOG_TRUST_ROOT_ANCHOR_KEY（本文件自行 setdefault 测试密钥）。
 """
 import json
 import os
@@ -21,7 +21,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-os.environ.setdefault("METACOG_TRUST_ROOT_ALLOW_DEFAULT", "1")
+os.environ.setdefault("METACOG_TRUST_ROOT_ANCHOR_KEY", "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except (AttributeError, ValueError):
@@ -151,8 +151,8 @@ def test_hb_legacy_missing_sig_failclosed():
         r.add("H-B v2.11.0 无签名基线 → fail-closed (False)",
               bool(hit) and hit[0][1] is False, "hit={}".format(hit))
 
-        # 过渡演示：截止期前（_legacy_anchor_sig_allowed(cutoff=(2, 26)) 模拟未来版本）→ 容忍
-        allowed = metacog.Store._legacy_anchor_sig_allowed(cutoff=(2, 26))
+        # 过渡演示：截止期前（_legacy_anchor_sig_allowed(cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1)) 模拟未来版本）→ 容忍
+        allowed = metacog.Store._legacy_anchor_sig_allowed(cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1))
         r.add("H-B 截止期前(cutoff=2,23) 无签名基线仍允许（过渡语义）", allowed is True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -160,7 +160,7 @@ def test_hb_legacy_missing_sig_failclosed():
 
 
 def test_hc_old_audit_chain_failclosed():
-    """H-C 回归：旧审计链（首条缺 epoch）在 v2.11.0 须 fail-closed；截止期前（cutoff=(2, 26)）仍容忍。"""
+    """H-C 回归：旧审计链（首条缺 epoch）在 v2.11.0 须 fail-closed；截止期前（cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1)）仍容忍。"""
     r = T()
     st, tmp = _new_store()
     try:
@@ -171,7 +171,7 @@ def test_hc_old_audit_chain_failclosed():
         ok_v211, cnt_v211 = st._verify_migration_audit()
         r.add("H-C v2.11.0 旧链 → fail-closed (False)", ok_v211 is False and cnt_v211 == 1,
               "ok={} cnt={}".format(ok_v211, cnt_v211))
-        ok_trans, cnt_trans = st._verify_migration_audit(cutoff=(2, 26))
+        ok_trans, cnt_trans = st._verify_migration_audit(cutoff=(metacog.Store.CURRENT_VERSION_TUPLE[0], metacog.Store.CURRENT_VERSION_TUPLE[1] + 1))
         r.add("H-C 截止期前(cutoff=2,23) 旧链仍容忍 (True)", ok_trans is True and cnt_trans == 1,
               "ok={} cnt={}".format(ok_trans, cnt_trans))
     finally:

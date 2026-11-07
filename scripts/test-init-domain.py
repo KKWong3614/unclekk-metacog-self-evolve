@@ -76,7 +76,9 @@ def test_output_param():
 
 
 def test_config_merge():
-    """--config JSON 覆盖模板字段（用户 A1 生效）"""
+    """--config 契约（v2.27.15 N-08 收口后）：安全制品内容覆盖被拒绝 rc=2；
+    name/redlines（白名单字段）覆盖仍可用。原「用户 A1 生效」用例按新安全契约改写——
+    该路径曾绕过 render_entry 转义与 A1/A4/M1 人类闸（外部审计 N-08 High）。"""
     t = T()
     tmp = Path(tempfile.mkdtemp(prefix="metacog_cli_cfg_"))
     cfg = tmp / "cfg.json"
@@ -88,9 +90,19 @@ def test_config_merge():
         sys.stdout = io.StringIO()
         rc = metacog.main(["init-domain", "code_review", "--output", str(out), "--config", str(cfg)])
         sys.stdout = old
-        t.add("返回码 0", rc == 0, "rc={}".format(rc))
-        a1 = (out / ".metacog" / "artifacts" / "A1-system-prompt.md").read_text(encoding="utf-8")
-        t.add("用户 A1 已合并", "用户自定义 A1 内容" in a1, "配置覆盖生效")
+        t.add("安全制品覆盖被拒 rc=2", rc == 2, "rc={}".format(rc))
+        t.add("拒绝时不落制品",
+              not (out / ".metacog" / "artifacts" / "A1-system-prompt.md").exists(), "无半写")
+        # 正向对照：白名单字段（name/redlines）覆盖可用
+        cfg2 = tmp / "cfg2.json"
+        cfg2.write_text(json.dumps({"name": "自定义领域名"}, ensure_ascii=False), encoding="utf-8")
+        out2 = tmp / "dom2"
+        sys.stdout = io.StringIO()
+        rc2 = metacog.main(["init-domain", "code_review", "--output", str(out2), "--config", str(cfg2)])
+        sys.stdout = old
+        t.add("白名单字段覆盖 rc=0", rc2 == 0, "rc={}".format(rc2))
+        a1 = (out2 / ".metacog" / "artifacts" / "A1-system-prompt.md").read_text(encoding="utf-8")
+        t.add("A1 为模板默认（未被配置触碰）", "A1-000" in a1, "模板内容就位")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return t

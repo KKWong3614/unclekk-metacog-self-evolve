@@ -7,12 +7,12 @@
 声明式元认知自修改引擎（让 Agent 越用越聪明且不越用越危险）。核心不变量：**改对了沉淀，改错了回滚**；五制品 + 三闸 + 双指标棘轮；**人在环、系统级强制的可控自指**。
 
 ## 1. 磁盘位置（新会话先读这些）
-- **技能根**：`C:\Users\Administrator\.workbuddy\skills\unclekk-metacog-self-evolve\`
+- **技能根**：`<USER>\.workbuddy\skills\unclekk-metacog-self-evolve\`
 - **核心代码**：`scripts/metacog.py`（143KB，引擎）、`scripts/sigcrypto.py`（签名后端）、`scripts/test-human-gate.py`（人类闸回归，69 断言）
 - **权威文档**：`SKILL.md`（84KB，含每版本块 + 诚实天花板 + 声称口径铁律 @L187）、`CHANGELOG.md`（91KB，v2.5.8 为最新）
 - **审计报告**：`references/independent-audit-v2.5.8.md`（**最新**，含两次派发如实记录）、其余 `references/independent-audit-hermes-v2.5.x.md`
-- **工作日志**：`C:\Users\Administrator\WorkBuddy\2026-09-26-10-31-47\.workbuddy\memory\2026-09-29.md`（本会话全程溯源）
-- **本会话工作区**：`C:\Users\Administrator\WorkBuddy\2026-09-26-10-31-47\`（含 `audit-verdict-v2.5.x-*.md`）
+- **工作日志**：`<USER>\WorkBuddy\2026-09-26-10-31-47\.workbuddy\memory\2026-09-29.md`（本会话全程溯源）
+- **本会话工作区**：`<USER>\WorkBuddy\2026-09-26-10-31-47\`（含 `audit-verdict-v2.5.x-*.md`）
 
 ## 2. 当前状态（截至 2026-10-06）
 - **版本**：v2.7.3（Hermes v2.7.2 复验 HIGH-1/2/3 + MEDIUM-1 + N3 诚实收口——基线位置固定化 + 删除/残缺 fail-closed + sentinel 双 key 比对 + N3 真实对抗测试；C-1 根因 `root_pubkey` 仍处 Agent 可写域、未根除；见 §2.13 / §4）。v2.7.2 状态见 §2.12（历史快照）。
@@ -326,7 +326,7 @@
 - **Hermes MCP 常 `Not connected`**（会话初或重启后）。处理：KK"重启并重新信任"Hermes MCP 后，先 `hermes_consult` 探针确认连通再派发（v2.5.6 同例）。
 - **派发审计务必给绝对路径让 Hermes 读盘**：只发自述摘要会误判"不通过"（本次 v2.5.8 第一派发即此失误）。Hermes 搜索根有限，不递归 `.workbuddy` 隐藏目录。
 - **Edit 精确匹配敏感**：中文全角括号 / 反引号易匹配失败；用最小唯一锚点（无反引号）更稳。
-- **验证纪律**：用 managed python `C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\python.exe`，`PYTHONPATH=scripts` 跑测试。
+- **验证纪律**：用 managed python `<USER>\.workbuddy\binaries\python\versions\3.13.12\python.exe`，`PYTHONPATH=scripts` 跑测试。
 
 ## 8. 本会话已完成动作（溯源）
 续写 v2.5.8 收口（五项 + N1'）→ 三次派发 Hermes（前两次 Not connected，第三次自述版"不通过"，重派代码级"Conditional Pass"）→ 落 N1' 守卫 + `test_n1p_resign_int_guard` + 隔离验证 201/201 → 写 `references/independent-audit-v2.5.8.md` → 更新 SKILL/CHANGELOG 评级为 Conditional Pass → 工作日志收口 → 落盘本 HANDOFF.md。

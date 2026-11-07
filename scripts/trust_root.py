@@ -241,21 +241,37 @@ def _load_verifier(cfg) -> "RsaRootVerifierProvider | TokenKeyProvider | None":
 # 加载时强制校验：无 _sig / _sig 不符 → load 返 corrupt → fail-closed（external-anchor-corrupt）。
 # 锚密钥位于代码（非可写 ledger），攻击者凭 ledger 写权限无密钥无法伪造签名 → C-1 在软件层闭合。
 # 残余边界：攻击者同时具备代码写权限（代码完整性）→ 彻底隔离须 TPM / 独立只读介质（out-of-scope）。
-# 部署：默认内嵌锚；可用环境变量 METACOG_TRUST_ROOT_ANCHOR_KEY（base64，≥32 字节）覆盖为部署专属锚。
+# 部署（v2.27.17 · C-01 收口）：源码内嵌默认锚已**删除**（"宁可装不上，不可自签"）——锚密钥
+# **仅**来自环境变量 METACOG_TRUST_ROOT_ANCHOR_KEY（base64，解码后须 ≥32 字节，M-01 校验）。
+# 未配置 / 非法 base64 / 过短 → get_anchor_key() 返 None / 抛 ValueError（fail-closed），拒绝启动。
+# 原兜底 METACOG_TRUST_ROOT_ALLOW_DEFAULT 同步废除（允许默认锚 = 允许可读代码者自签，与 C-01 相悖）。
 # 升级迁移：v2.8.0 前无签名旧配置加载即 fail-closed，须重新执行 --enable-external 落盘签名配置。
 
-_TRUST_ROOT_ANCHOR_KEY_DEFAULT = bytes.fromhex(
-    "9f2c4a7e3b1d8c6a5e0f9a2b7c4d1e8f3a6b5c0d9e2f1a4b7c0d3e6f9a2b5c8d")
+def get_anchor_key():
+    """v2.27.17（C-01 收口 + M-01）：返回信任根签名锚密钥——**仅**来自环境变量
+    METACOG_TRUST_ROOT_ANCHOR_KEY（base64）。
 
-def get_anchor_key() -> bytes:
-    """v2.8.0：返回信任根签名锚密钥。优先环境变量（部署专属），否则内嵌默认锚。"""
+    - 环境变量未设置 → 返回 None（调用方 fail-closed 拒绝启动；源码默认锚已删除）。
+    - 非法 base64 / 解码后 <32 字节 → 抛 ValueError（fail-closed，**不**静默回落任何兜底——M-01）。
+    - 合法 → 返回 bytes（部署专属锚）。
+
+    v2.27.18（第四轮审计 N-1 收口）：b64decode 开 `validate=True` 严格字母表校验——原默认
+    validate=False 会**静默剥除**非字母表字符（如密钥尾部混入 `!!!` 仍返回有效密钥），使
+    「非法 base64 → ValueError」非全称成立；现与验签路径（sigcrypto verify 侧）口径一致。"""
     env = os.environ.get("METACOG_TRUST_ROOT_ANCHOR_KEY")
-    if env:
-        try:
-            return base64.b64decode(env)
-        except Exception:
-            pass
-    return _TRUST_ROOT_ANCHOR_KEY_DEFAULT
+    if not env:
+        return None
+    try:
+        key = base64.b64decode(env, validate=True)
+    except Exception as e:
+        raise ValueError(
+            "METACOG_TRUST_ROOT_ANCHOR_KEY 不是合法 base64（{}）：拒绝启动（M-01 fail-closed，"
+            "不回落任何默认锚——C-01 收口：源码内嵌默认锚已删除）。".format(e))
+    if len(key) < 32:
+        raise ValueError(
+            "METACOG_TRUST_ROOT_ANCHOR_KEY 解码后仅 {} 字节（须 ≥32）：拒绝启动（M-01 fail-closed，"
+            "不回落任何默认锚——C-01 收口：源码内嵌默认锚已删除）。".format(len(key)))
+    return key
 
 def _canonical_trust_root(payload: dict) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -312,7 +328,13 @@ class TrustRootConfig:
             return cls(corrupt=True, enabled=True)
         # v2.8.0 C-1 闭合：信任根配置须带内嵌锚密钥签名；无签名/签名不符 → fail-closed
         # （防攻击者凭 ledger 写权限换 root_pubkey + 自签证明，闭合 C-1 循环论证）
-        if not verify_trust_root_config_sig(d, get_anchor_key()):
+        # v2.27.18（第四轮审计 N-2 收口）：锚密钥未配置（C-01 后无默认锚）时，存量带签名配置
+        # 无法验签——先取密钥判 None 直接判 corrupt（fail-closed），杜绝
+        # verify_trust_root_config_sig 对 None key 抛未捕获 TypeError（v2.27.17 升级部署
+        # 「存量签名配置 + 忘配 env」曾得到裸 traceback 而非明确失败态）。
+        # env 非法/过短仍由 get_anchor_key 抛 ValueError（M-01 fail-closed，保持透传）。
+        _anchor_key = get_anchor_key()
+        if _anchor_key is None or not verify_trust_root_config_sig(d, _anchor_key):
             return cls(corrupt=True, enabled=True)
         return cls(
             backend=d.get("backend", "legacy"),
@@ -565,13 +587,10 @@ def build_trust_root(cfg: TrustRootConfig):
         return DenyTrustRoot("external-anchor-corrupt")
     if not cfg.enabled or cfg.backend == "legacy":
         # v2.8.2 C-11 硬化（默认 fail-closed）：未启用外部锚（legacy）视为安全配置缺失 →
-        # 默认 DenyTrustRoot（拒绝启动，强制外部锚成为部署必需项）。向后兼容逃生舱：
-        # 仅当显式 METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1（严格等于字符串 "1"）才回落 legacy（返回 None）。
-        # 设计演进：v2.8.1 为 opt-in（METACOG_REQUIRE_EXTERNAL_ANCHOR=1 才 deny）；v2.8.2 翻转为默认 deny。
-        # 严格 == "1" 判定（Hermes v2.8.2 高-1 修复）：避免 truthy 误判——`=0`/`false`/`no`/`off` 等
-        # 非空字符串在 truthy 语义下会错误解除强制力；仅 "1" 才回落 legacy，其余（含未设置）一律 deny。
-        if os.environ.get("METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR", "").lower() == "1":
-            return None
+        # 默认 DenyTrustRoot（拒绝启动，强制外部锚成为部署必需项）。
+        # v2.27.17（C-01 专项 H-01 收口）：**legacy 逃生舱（METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1）
+        # 已删除**——该一句 env 即可令 external_trust_root() 返 None，从而把 H-05 完整性硬闸整体
+        # 旁路回 opt-in（审计实证的 H-01→H-05 削弱链）。现：未启用外部锚一律 DenyTrustRoot。
         return DenyTrustRoot("external-anchor-required")
     if cfg.backend == "oob":
         verifier = _load_verifier(cfg)
@@ -670,23 +689,23 @@ def _restrict_credential(path: Path) -> None:
 
 
 class TrustRootWriteError(Exception):
-    """v2.8.1 C-9：以默认（源码内嵌共享）锚密钥启用外部锚被拒。"""
+    """v2.8.1 C-9：锚密钥未配置/不合规时启用外部锚被拒（v2.27.17 C-01 收口后：源码默认锚已删，
+    唯一合法来源是专属 env 密钥）。"""
 
 
 def write_trust_root_config(root: Path, backend: str, attestation_path: str = "",
                             oob_token_dir: str = "", root_pubkey: str = "") -> None:
     """启用外部锚（人类在 TTY 在场时执行）。写入 ledger/trust-root.json。
     v2.7.0：root_pubkey 为离线 RSA 根公钥（私钥人类离线持有，严禁落盘）；sim_key 已弃用。"""
-    # v2.8.1 C-9 硬化：默认（源码内嵌、随代码分发的共享）锚密钥不得用于启用外部锚。
-    # 该密钥任何可读代码者均可提取并伪造签名（C-9：源码明文 → 读即伪造）；生产/非本地部署
-    # 须以 METACOG_TRUST_ROOT_ANCHOR_KEY 设为专属随机密钥。本地开发可显式
-    # METACOG_TRUST_ROOT_ALLOW_DEFAULT=1 承担风险。
-    if (get_anchor_key() == _TRUST_ROOT_ANCHOR_KEY_DEFAULT
-            and not os.environ.get("METACOG_TRUST_ROOT_ALLOW_DEFAULT")):
+    # v2.27.17（C-01 收口）：源码内嵌默认锚已删除、ALLOW_DEFAULT 兜底已废除——锚密钥唯一来源
+    # 是专属 env（METACOG_TRUST_ROOT_ANCHOR_KEY）。未配置 → get_anchor_key() 返 None → 拒写
+    # （fail-closed）；非法/过短由 get_anchor_key 的 M-01 校验抛 ValueError。
+    _key = get_anchor_key()
+    if _key is None:
         raise TrustRootWriteError(
-            "拒绝以默认（源码内嵌共享）锚密钥启用外部锚：该密钥随代码分发，可读代码者即可伪造签名。\n"
-            "生产/非本地部署须设置环境变量 METACOG_TRUST_ROOT_ANCHOR_KEY 为专属随机密钥；\n"
-            "本地开发须显式设置 METACOG_TRUST_ROOT_ALLOW_DEFAULT=1 以承担风险。")
+            "拒绝启用外部锚：锚密钥未配置（C-01 收口：源码内嵌默认锚已删除，"
+            "「宁可装不上，不可自签」）。\n"
+            "请设置环境变量 METACOG_TRUST_ROOT_ANCHOR_KEY 为 base64 编码的 ≥32 字节专属随机密钥。")
     # v2.25.1 #2 硬化（root_pubkey JSON 容错）：落盘前校验 root_pubkey 为合法可反序列化公钥；
     # 非法（如非 JSON 形式 {n:...,e:65537}）→ 直接 fail-closed 拒写，杜绝损坏值被持久化后
     # 静默退化为 external-anchor-no-verifier（见 H-3 真实副本 no-verifier 实测）。
@@ -805,12 +824,10 @@ def _selftest() -> int:
             pass
         print("  token stub fail-closed OK")
 
-        # 工厂：v2.8.2 起默认 fail-closed（legacy 不再返回 None，须显式 opt-out 才回落 None）；corrupt → Deny；未知 backend → Deny
+        # 工厂：v2.8.2 起默认 fail-closed；v2.27.17（C-01 专项 H-01 收口）逃生舱已删除——
+        # 未启用外部锚一律 Deny，不再有任何回落 None 的 env 旁路；corrupt → Deny；未知 backend → Deny
         assert build_trust_root(TrustRootConfig()).name == "deny"
-        # 显式 opt-out（METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1）才回落 legacy None（向后兼容逃生舱）
-        os.environ["METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR"] = "1"
-        assert build_trust_root(TrustRootConfig()) is None
-        del os.environ["METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR"]
+        assert build_trust_root(TrustRootConfig()).name == "deny"  # H-01 删除后无逃生舱：重复断言钉死语义
         # hsm + root_pubkey → 合法离线根姿态（genuine break）；重置 att 为合法证明（上一步残留 forged）
         write_root_attestation(att, pub, "cf", priv_off)
         cfg_root = TrustRootConfig(enabled=True, backend="hsm", attestation_path=att, root_pubkey=pub_off)

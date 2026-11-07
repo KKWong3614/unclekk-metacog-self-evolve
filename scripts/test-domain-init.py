@@ -5,6 +5,7 @@
 import os as _os
 _os.environ.pop('PYTHONHOME', None)
 _os.environ.pop('PYTHONPATH', None)
+_os.environ["METACOG_TRUST_ROOT_ANCHOR_KEY"] = "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5"
 
 import shutil
 import sys

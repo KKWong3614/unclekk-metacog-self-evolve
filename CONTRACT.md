@@ -72,3 +72,27 @@ L1 优化器（skill-optimizer / unclekk-skill-library 等）的棘轮裁决是 
 ---
 
 *本契约由 `metacog-self-evolve` skill 承载，作为 SHE(L3) 与 metacog(L2) 的统一不动点定义。2026-09-06 合并确立。*
+
+## 9. 锚状态 attestation 公钥根（anchor-attest-pubkey-root）
+
+- **用途**：钉固 C-1 非对称层（离线 attestation）信任根公钥的 SHA-256（v2.27.22 ①）。
+  `anchor-attest-verify` 加载树外公钥后须与本指纹一致，否则 fail-closed（攻击者替换
+  树外公钥 + attestation 双文件时，指纹不匹配本不动点，验签必拒——结构性闸门）。
+
+
+- **用途**：钉固 C-1 双密钥根信任的**根信任公钥 RK** 指纹（v2.27.32，最高权威）。
+  根锚密封须由 RK 私钥签名、经 RK 公钥验签；本指纹为信任链最高权威，
+  缺失或不符即 fail-closed（攻击者替换 RK 公钥即被本不动点拒绝）。
+
+## 10. 根信任公钥（root_attest_pubkey_sha256 · 最高权威）
+
+- **用途**：钉固 C-1 双密钥根信任的**根信任公钥 RK** 指纹（v2.27.32，最高权威）。
+  根锚密封须由 RK 私钥签名、经 RK 公钥验签；本指纹为信任链最高权威，
+  缺失或不符即 fail-closed（攻击者替换 RK 公钥即被本不动点拒绝）。
+- **root_attest_pubkey_sha256**: `c2d96c4cba8529eec258db0119ea757d6d4a176a8245ac560d1ac06fc9dd8fd8`
+
+## 9. 锚状态 attestation 公钥根（anchor-attest-pubkey-root）
+
+- **用途**：钉固 C-1 双密钥根信任中的 **attestation 公钥 AK** 指纹（v2.27.32）。
+  密封背书指纹须与本指纹一致，否则 fail-closed（攻击者替换 AK 公钥即被拒）。
+- **anchor_attest_pubkey_sha256**: `218e06482ba75c8293b1b100d08d27db713308daf138a60a6e9b8a7d13fecdba`

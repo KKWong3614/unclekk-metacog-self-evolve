@@ -8,7 +8,7 @@
 A. utility 是 0~1 的**任务达成度自评**，不是客观指标。建议用可观察信号锚定：按时交付=0.8~1.0、一次返工压到 0.5~0.6、两次以上返工≤0.3。关键是**跨 episode 口径一致**，棘轮比的是相对基线而非绝对精度。不要为"好看"注水（见 SKILL.md 使用纪律）。
 
 **Q2. 同一条规则被反复 `REVERT`（连续 3 次）怎么办？**
-A. 这正是 `verdict --auto-m1` 的触发信号，或 `status` 连续两窗口趋势不升也会提示。此时问题不在规则内容，而在"怎么找规则"（M1）。**必须**改 M1 并 `apply --human-ok`，不要继续在 A2 上打补丁。
+A. 这正是 `verdict --auto-m1` 的触发信号，或 `status` 连续两窗口趋势不升也会提示。此时问题不在规则内容，而在"怎么找规则"（M1）。**必须**改 M1；`--auto-m1` 生成的 M1 提议属高风险条目，须经人类在真实 TTY 运行 `apply --id <提案>` 交互式口令签绑定签名后落盘（无人值守走 `confirm --sign` 预签名 + `apply --sig`，见 Q15），不要继续在 A2 上打补丁。
 
 **Q3. `meta-log` 和 `episodes.jsonl` 有什么区别？**
 A. `episodes.jsonl` 是每次任务的原始记账（任务/utility/violations/归因制品）；`ledger/meta-cognition.log` 是**反思层**——只在 PROMOTE/REVERT/M1 触发时记录"为什么这么裁决、洞察是什么"。前者喂棘轮，后者喂 `meta_optimizer` 做跨周期优化建议。两者互补，不互相替代。
@@ -48,8 +48,8 @@ A. 红线与证据门槛要求**≥2 次独立复现**——同一个任务报�
 **Q14. `verdict` 不裁决、一直 `HOLD`？**
 A. `verdict` 的棘轮验收只在**累计 5 个新 episode** 后触发，且只取 `trial_from_index`（apply 时刻）之后的留出集数据。证据不够时它返回 `HOLD` 并提示还差几个——这是设计内（防小样本误判），不是卡死。等任务跑够 5 笔（带可观测事件）再跑 `verdict`。留出集为空或不足时**绝不回落训练集放行**。
 
-**Q15. `apply` 高风险条目直接 rc=2 退出、提示需要 `--human-ok`？**
-A. v2.4.0 起人类确认已**凭证化**：`--human-ok` 旗标被废除（AI 自己跑就等于自签，无意义）。正确路径是三步：① 人类在**真实 TTY** `python3 "$MC" confirm --init` 设口令（非 TTY 一律拒绝）；② `python3 "$MC" confirm --approve --id <提案>` 生成一次性绑定 token（30 分钟过期）；③ `python3 "$MC" apply --token <token>` 落盘。CI / 非交互环境跑不了 confirm，属于预期——高风险改动本就要人拍板。
+**Q15. `apply` 高风险条目直接 rc=2 退出、提示需要人类确认（requires_human）？**
+A. `--human-ok` 旗标已废除（v2.4.0，AI 自己跑等于自签），`confirm --approve` + `apply --token` 亦已于 **v2.5.7 移除**。现行口径（引擎实测）：① 人类在**真实 TTY** `python3 "$MC" confirm --keygen` 建立人类公钥信任根（一次性）；② 需要确认时，由人类在 TTY 运行 `python3 "$MC" apply --id <提案>`，**交互式输入口令当场完成签绑定签名**（v2.5.7 合并方案，非 TTY 一律拒绝）；③ 无人值守场景：人类预签 `python3 "$MC" confirm --sign --id <提案>` 生成签名，再 `python3 "$MC" apply --id <提案> --sig <签名>` 应用（v2.25.14）。CI / 非交互跑不了 TTY 签名属预期——高风险改动本就要人拍板。
 
 **Q16. 凭据 / 配置怎么传？制品里能写 API key 吗？**
 A. 红线第 6 条**禁止明文凭据进制品**。正确做法：API key 一律走环境变量（`$env:NAME` / `os.environ`），制品里只留「需环境变量 X」提示。`metacog.py` 本身不需要任何外部 API key（纯本地引擎）；若你的 A4 工具策略引用了外部服务，凭据由调用方（你的 Agent 编排）在环境里注入，不要写进 `.metacog/artifacts`。已知的引擎环境变量：`METACOG_FREEZE_ANCHOR`（覆盖树外锚路径，仅过树内校验，超出 tree-only 模型需部署隔离兜底）、`METACOG_ANCHOR_INIT_TOKEN` / `METACOG_FREEZE_RESET_TOKEN`（重建锚/重置冻结态的特权门禁，属防御纵深非密码学根）、`METACOG_REQUIRE_PROTECTED_ANCHOR`（C-1 L3 强制 fail-closed）。
@@ -72,5 +72,23 @@ python3 "$MC" verdict                           # ③ 累计 5 笔后双指标�
 
 **Q20. `status` 看什么？**
 A. `python3 "$MC" status` 一屏汇总当前态：元层参数源（`[元层参数源: file/default]`，即 M1 参数是否来自 `meta/M1-evolve-policy.json`）、双指标阈值（`utility` 基线 − ε / `violation_rate` 严格不退）、自适应三档阈值（开 `--adaptive` 时）、当前 episode 计数与距下次裁决还差几个、以及回滚可用性提示。排查「为什么还没裁决 / 参数没生效」先跑它。
+
+**Q21. `verdict` 裁决 `REVERT` 之后该做什么？**
+A. REVERT 是**自动回滚**，条目已回到改动前状态，无需手动 `rollback`。三步走：① `status` + `retrieve --strict` 确认回滚已发生、生效态干净；② 读 `meta-cognition.log` 与试用期窗口 episode 的归因，判断是 utility 掉了还是 violation_rate 升了；③ 分层再行动——内容错就修订重提，连续 3 次 REVERT 则升级 M1（决策树见 `anti-patterns.md` 类别七 G2）。最忌换措辞原样重提：证据窗口重新累计烧 5 笔 episode，大概率再吃一次 REVERT（见 `anti-patterns.md` G1）。
+
+**Q22. 首跑 `init` 报 `LedgerAnchorDefaultError`？**
+A. 这是**安全设计不是 bug**：账本签名拒绝使用源码内嵌的共享默认锚密钥（防「拿到同一份 skill 的任何人共享同一把签名钥」）。处理（v2.27.17 起唯一口径）：配置环境变量 `METACOG_TRUST_ROOT_ANCHOR_KEY` 为**专属随机密钥**（base64 编码的 ≥32 字节；生成：`python3 -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"`；bash 前缀写法 / `$env:METACOG_TRUST_ROOT_ANCHOR_KEY='<密钥>';` / `set METACOG_TRUST_ROOT_ANCHOR_KEY=<密钥> &&`，见 SKILL.md 步骤 0）。**本地与生产同口径**——源码内嵌默认锚已删除（「宁可装不上，不可自签」），原 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 兜底**已废除**、设置无效。设完重跑 `init` 即可。信任根分层与诚实天花板见 SKILL.md「步骤 0 警告」与对应章节。
+
+**Q23. 退出码 rc 一览（排查先看这个）**
+A. 与 SKILL.md 退出码表一致：
+
+| rc | 含义 | 典型场景 | 第一动作 |
+|---|---|---|---|
+| 0 | 成功 | 全部命令正常路径 | — |
+| 1 | 完整性漂移 | `verify` 检出制品哈希偏离快照（D4） | 按 Q18 三路恢复（git checkout / rollback / 重 apply） |
+| 2 | 参数/前置校验失败，或安全闸拦截 | 缺 `--attributed` / `--events` / `--utility`；`--human-ok` 对 requires_human 硬拦截；闸门 HOLD/BLOCK；`--out` 写失败 | 看报错「↩ 怎么改」；对照 `troubleshooting.md` / `error-glossary.md` |
+| 3 | apply 拒绝（fail-closed 硬闸） | 账本篡改 / 链缺失（D4 入口硬闸）；hsm 态人类公钥自举缺离线设备证明（R-7） | 先 `verify` 定位篡改面，恢复后重走 propose→gate→apply |
+
+场景化排查见 `references/troubleshooting.md`，报错文案逐条词典见 `references/error-glossary.md`。
 
 > 以上均基于本引擎真实行为（CLI 调用、文件落地、闸门语义），不臆造接口。具体命令的完整参数见 SKILL.md「最小运行示例」与各子命令 `--help`。

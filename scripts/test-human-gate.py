@@ -318,6 +318,11 @@ def test_b2_anchor_missing_sig_holds():
         p2["status"] = "trial"
         start2, hold2 = metacog.resolve_trial_start(st, p2, [])
         r.add("无签名锚(requires_human)一律 HOLD", hold2 is not None, "hold={}".format(hold2))
+        # v2.25.21（m-4）：apply 主路径入口接 applies_integrity_ok（D4 硬闸）——
+        # 上面为场景 3 制造的直写篡改若不恢复，场景 4 的正常 apply 会在入口被
+        # 完整性硬闸（rc=3）正确拦下。此处恢复原文（round-trip 保 key 顺序，
+        # 哈希与 D4 基线重新一致），让场景 4 回归「正常 apply 不误伤」意图。
+        metacog.write_text(st.applies, json.dumps(applied, ensure_ascii=False) + "\n")
 
         # 回归：非 requires_human 提案经正常 apply（无签名）落入合法锚，仍应信任（不误伤正常流程）
         # 注（v2.5.8）：不再手动覆写 applies.jsonl 制造「已篡改」基线——H-2 的 D4 校验会据此 HOLD，
@@ -351,6 +356,9 @@ def test_p0_legacy_install_autopin():
         if idx != -1:
             cpath.write_text(text[:idx].rstrip() + "\n", encoding="utf-8")
         r.add("升级前 CONTRACT.md 无钉固", st.pinned_human_pubkey_fingerprint() is None, "pinned=None")
+        # v2.27.17（H-05 默认开）：剥离第 7 节 = 清单内容变更；模拟「合法版本升级」须重基线，
+        # 否则 keygen 顶部清单硬闸按篡改拒绝（rc=3，新预期行为）。重基线只吸收本次合法升级。
+        st.record_script_integrity()
         # v2.5.2：verify 必须保持只读——运行 verify 后钉固仍应为 None（不得自动钉固）
         metacog.cmd_verify(st, SimpleNamespace())
         r.add("verify 只读不钉固（v2.5.2）", st.pinned_human_pubkey_fingerprint() is None, "pinned 仍 None")

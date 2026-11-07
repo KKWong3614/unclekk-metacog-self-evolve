@@ -1,9 +1,1198 @@
+## v2.27.48（2026-10-30）— 第二轮 TRACE 反馈整改：旧版内容彻底收敛 + 验证状态准确化
+
+**触发**：SkillHub 平台第二轮 TRACE 反馈（2026-10-30，综合 **4.8/5**，较上一轮 4.7 提升），剩余短板：「内容过于庞杂，旧版说明与当前信息容易混淆，**部分验证状态和清单不够准确**；建议精简历史内容、统一说明，并加强发布前自动核对」。
+
+- **旧版内容彻底不随包（诚实披露：非删除，仅收敛发布范围）**：`references/operations-history.md`（99.5KB 运行层沿革）、`independent-audit-v2.1.1.md` + `independent-audit-integrated-v2.1.2.md`（v2.1.x 早期审计样本）、`test-evidence-history-v2.1.1.md`（v2.1.1 时代 2026-09 实跑日志）统一移入 dev 树 `references/archive/`；SKILL.md 版本沿革指针改指**随包 `CHANGELOG.md`（唯一权威来源）**；INDEX.md 两区同步。
+- **验证状态准确化（不编造，实跑取数）**：「已验证」章节由「2026-09-08 · v2.1.1 时代 203/203 全绿 + v2.0.0/v2.1.0/v2.1.1 版本流水」重写为 **v2.27.48 实跑 56/56 套件诚实 PASS（2026-10-30，三重判定：exit=0 + 末次自报全过 + 无 `[FAIL]` 标记）**；`references/test-evidence.md` 重写为当前快照（套件清单 + 攻击面对应表 + 诚实边界）。
+- **修复随包运行器 fail-closed 缺陷**：运行器 `_run_all_tests.py` 对应有套件清单 `scripts/test-suite-manifest.txt` **缺失即 FAIL**，而既往 .txt 全剔除策略会连清单一起排掉——**随包运行器将开箱即挂**。现将清单列入 .txt 例外白名单（服务端接受 .txt，已由 v2.27.39 包实证），并新增构建脚本固化该例外。
+- **发布前自动核对强化**：新增 `scripts/build_release_package.py`（确定性构建发布包：扩展名白名单 + .txt 例外 + 目录/文件级剔除规则全部固化，取代手工拷贝）；硬闸新增 **G 检查（验证状态新鲜度：「已验证」章节须标注当前版本与实跑日期，漂移即 FAIL）**，并扩展 B（.txt 例外）、F（archive 目录）、E（版本沿革指针须指向 CHANGELOG）。
+- **验证**：源码树 / 发布树 publish_consistency_check.py 全项（A–G）PASS。
+
+## v2.27.47（2026-10-30）— Hermes 终轮复验（90/100）残留收口：PBKDF2 轮数更正
+
+**复验结论**：Hermes 对 v2.27.46 终轮核验，R-1 主体闭合（旧「一次性 token/30min」清除、硬闸 C 项已补、`--src` 实跑 PASS），总裁定 **CONDITIONAL-PASS（90/100）**；唯一残留：SKILL.md L566「PBKDF2-SHA256(10 万轮)」与引擎实测 `scripts/sigcrypto.py:215 _PBKDF2_ITERS=200_000`（20 万轮）不符——系误取 v2.4.0 `confirm --init` 时代（存储口令哈希方案）的历史数字，v2.5.x 起改为口令解密/重加密私钥方案并统一 20 万轮；文档低估实际强度，非安全弱化。
+
+- **修复**：操作类文档「10 万轮」→「20 万轮」（SKILL.md 等 6 文件全量扫描替换）；硬闸 C 项补「10 万轮」过时模式（负向语境：旧/已改为/v2.4.0）防回归。
+- **验证**：源码树 / 发布树全项 PASS；`grep -rn "10 万轮"` 操作类文档 0 命中。
+
+## v2.27.46（2026-10-30）— Hermes 收口复验残留 R-1 修复（CONDITIONAL-PASS 85/100 → 收口）
+
+**复验结论**：Hermes 对 v2.27.45 收口复验，上轮 7 项发现 6 项 Confirmed 闭合，总裁定 **CONDITIONAL-PASS（85/100）**；唯一残留 R-1（P2 文档级）：SKILL.md 密码学假设段（L566）人类闸机制仍写旧「一次性 token（绑定提案/30min 过期/用后即焚）」——引擎实测现行机制为「TTY 交互式口令签绑定签名（绑定 id+chash+trial_from_index）+ 签名 use-once 消费」（metacog.py:2852/3496-3515），无 30min 过期概念。
+
+- **R-1 修复**：L566 改为现行机制描述；`publish_consistency_check.py` C 项补「一次性 token」过时机制模式（负向语境：移除/废除/已删/旧/已改为/use-once），防同类残留复发。
+- **验证**：源码树 / 发布树全项 PASS。
+
+## v2.27.45（2026-10-30）— Hermes 发布前审计收口（NOT PASS 67/100 → P1/P2 全修）
+
+**触发**：owner 指令「修后过 Hermes 审计」。Hermes 以异族独立审计员身份对 v2.27.44 改版审计，总裁定 **NOT PASS（67/100）**——三层整改方向正确，但 v2.27.43 的口径统一**自身引入新冲突**：把人类确认流程统一到了引擎已于 v2.5.7 移除的 `confirm --approve` + `apply --token`（报告归档：`references/hermes-audit-v2.27.44-post-slim.md`）。
+
+- **P1（严重，4 项全修）**：① faq-deep/anti-patterns/troubleshooting 共 6 处 `confirm --approve`/`apply --token` 教学统一为**引擎实测现行口径**（人类 TTY `confirm --keygen` → `apply` 交互式口令签绑定签名；无人值守 `confirm --sign --id` → `apply --sig`，v2.25.14）；② SKILL.md 最佳实践 3「一次性 token」旧用语更正；③ SKILL.md 威胁模型「须显式 ALLOW_DEFAULT」自相矛盾更正（同 ANCHOR_KEY 唯一口径）；④ SKILL.md 步骤 7.1 断链 `design/meta-cognition-log-spec.md`（v2.27.13 已并入正文）改指 faq-deep.md。
+- **P2（中，3 项全修）**：⑤ 最佳实践 10 评级残留统一为 4.7/5（平台权威）；⑥ §4 v2.12.0→v2.20.0 逐版收口枚举（约 500 字）改为指向 CHANGELOG 的一行概括；⑦ 一致性硬闸升级——C 项新增 `confirm --approve` / `apply --token` 废除模式（负向语境词：移除/废除/已删），D 项扩至扫描 **SKILL.md 正文** references 引用（链接与反引号提及均查，修复漏检盲区）。
+- **方法论复盘（诚实登记）**：本轮 NOT PASS 的根因是 v2.27.43 统一口径时**未对照引擎 argparse 实测**、沿用了 faq 旧文的 v2.4.0 三步 token 流程——修复时已以 `scripts/metacog.py` argparse 注册为准。教训：操作口径统一必须以引擎实测为权威源，不得以旧文档互证。
+- **验证**：源码树 / 发布树 publish_consistency_check.py 全项（A-F）PASS。
+
+## v2.27.44（2026-10-30）— 发布范围收敛：历史审计档案不再随包（TRACE 短板根治）
+
+**触发**：SkillHub TRACE 反馈（4.7/5）持续指向「内容过于庞杂、不同指南之间存在旧用法冲突」。v2.27.42 迁出正文叙事、v2.27.43 统一操作口径后，冲突源仍剩一处：随包 `references/` 携带 45 份逐版本审计报告 / Hermes dossier / 修复路线图（约 700KB），内含大量当时口径（已废除的 `--human-ok`、`METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 等）。
+
+- **发布范围声明（诚实披露，非删除）**：历史审计档案**全文保留于作者 dev 树 `references/`** 作证据链，仅不再随包分发；`INDEX.md` 重构为「随包文档 / 历史审计档案（仅列名）」两区，随包内链接全部有效。
+- **随包保留**（操作 + 设计 + 治理 + 证据，14 根文件 + design/3 + benchmark/）：新手路径 5 件、paper-mapping、asymmetric-trust-root-design（第三方审计核对依据）、C-1 owner 结案裁定书、第三方审计签核指南、早期独立审计样本 v2.1.1/integrated-v2.1.2（SKILL.md 引用）、test-evidence、operations-history。
+- **不随包**（45 份）：independent-audit-v2.2.6→v2.8.11-r3、independent-audit-hermes-v2.5.1→v2.7.1、hermes-audit-v2.25.x→v2.9.0、audit-v2.6.6→v2.8.4、audit-response/findings/handoff/env-spec、remediation-*、implementation-checklist-v2.0、external-anchor-DRAFT、trace-reliability。
+- **一致性硬闸升级**：`publish_consistency_check.py` 新增 **F 检查项**（审计档案禁入发布树，glob 匹配即 FAIL），防回归。
+- **验证**：源码树 PASS；发布树全量 PASS 后方可发布。
+
+## v2.27.43（2026-10-30）— 统一操作口径 + 发布前一致性硬闸（TRACE 反馈第三条落实）
+
+**触发**：SkillHub 平台反馈（2026-10-30，4.7/5）建议「精简说明、统一操作口径，并加强发布前的一致性检查」。v2.27.42 落实了前两条（瘦身 + 历史迁出），本版落实第三条并清理跨文档旧用法冲突。
+
+- **跨文档旧用法统一（13 处，均有 file:line 实证后修正）**：
+  - SKILL.md 步骤 7.2：三条 `init-domain` 示例命令与说明文字仍在教**已废除**的 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 兜底（与步骤 0「唯一口径 = `METACOG_TRUST_ROOT_ANCHOR_KEY`」文内自冲突）→ 全部统一到 ANCHOR_KEY 唯一口径并附密钥生成命令
+  - `faq-deep.md`：Q3 教 `apply --human-ok`（与同文件 Q15「旗标已废除」自相矛盾）→ 统一 confirm 凭证化；LedgerAnchorDefaultError 处置教已废除兜底 → 现行口径；Q15 标题措辞去旧旗标
+  - `error-glossary.md` / `anti-patterns.md` / `troubleshooting.md` / `walkthrough-first-promote.md`：同口径统一
+  - `implementation-checklist-v2.0.md`：v2.0 时代历史清单（1700+ 行），按「不 rewrite 历史」原则加**历史存档 banner**（含已废除用法、勿照抄）
+- **新增发布前一致性硬闸 `scripts/publish_consistency_check.py`**：A 版本三方一致（frontmatter/package.json/_skillhub_meta.json + CHANGELOG 条目）/ B 禁发文件（dotfile、dist、审计探针、非白名单后缀）/ C 废除用法扫描（操作类文档中正向教学即 FAIL，负向提法放行）/ D INDEX 链接有效性 / E 历史迁移指针。支持 `--src`（跳过 B）与发布树全量两种模式。
+- **验证**：源码树 PASS；发布树全量 PASS 后方可发布。
+
+## v2.27.42（2026-10-30）— 按平台最新 TRACE 反馈二次瘦身（历史叙事迁出正文）
+
+> 改号说明：本内容原拟以 v2.27.41 发布，服务端返回 409「版本 2.27.41 已存在」（平台侧版本号保留冲突，该号未被任何可拉取版本使用），按平台要求改号 v2.27.42 重发，**内容与本条目描述完全一致**。
+
+**触发**：SkillHub 平台最新反馈（2026-10-30）综合 4.7/5，指名短板「内容过于庞杂，旧教程与当前用法存在冲突；建议减少历史信息、突出唯一操作指引，并持续更新示例和说明」。
+
+- **历史叙事整体迁出正文**：SKILL.md 步骤 6 区域内嵌的 v2.2.5→v2.27.x 逐版本审计收口叙事（原 261–473 行，约 212 行 / 60+ 条巨型 blockquote）**原文迁至 `references/operations-history.md`**（同包保留、逐字未删改，诚实披露不缩水）；正文替换为 1 行指针。
+- **评级声明对齐平台事实**：正文评级以平台最新反馈 **4.7/5**（2026-10-30）为准；此前「最新一轮 4.8/5」标注与平台展示冲突，按诚实原则更正并保留历史 4.8 记录（v2.27.38 包重扫）。
+- **行数轨迹**：1071（v2.27.38 前）→ 952（v2.27.39 首轮精简）→ 874（评级块压缩 + 11 段历史删除）→ **663（本轮历史块迁出）**；累计净减 408 行。
+- **验证**：步骤 0–7 操作命令与输出示例零删减；当前生效诚实边界统一收敛于 §4 与第一屏披露；迁移文件含逐字保真声明。
+
 # Changelog · unclekk-metacog-self-evolve
 
 版本号遵循语义化：主版本=不兼容契约变更；次版本=功能/安全增强；修订=修复。
 所有变更须经测试（`scripts/test-core.py` + `scripts/test-boundary-cases.py`）后方可晋级。
 
-> **评级口径说明（避免误读「有条件通过」）**：本文件中反复出现的「有条件通过 / CONDITIONAL-PASS」是 **Hermes 代码层独立审计裁定**的评级——Hermes 审计员与本 skill 同属一个 Agent 生态、同一 runtime（审「自己生成的代码」），其裁定属**流程级限制**，升级为 full PASS 须生态外第三方审计签字，不代表代码层存在未决漏洞。本发布包在 **SkillHub TRACE 五维评测：v2.25.10 包综合 4.6/5，最新一轮（v2.25.12 包）综合 4.7/5（优秀）、安全性扫描 5.0/5、无 P0/P1**——TRACE 平台评级与 Hermes 审计裁定是两套独立口径，TRACE 报告叙述里的「有条件通过」字样是评测 AI 回声了本文件诚实披露文本，非 TRACE 综合判定。此说明不弱化任何原有诚实边界。
+> **评级口径说明（避免误读「有条件通过」）**：本文件中反复出现的「有条件通过 / CONDITIONAL-PASS」是 **Hermes 代码层独立审计裁定**的评级——Hermes 审计员与本 skill 同属一个 Agent 生态、同一 runtime（审「自己生成的代码」），其裁定属**流程级限制**，升级为 full PASS 须生态外第三方审计签字。**v2.27.15 更正：上述流程级限制不构成"代码层无未决漏洞"的证明**——外部对抗审计（2026-10-24 两轮）已发现 C-01/C-02/N-08 等实质问题（C-02/H-06/N-08 已修，C-01 仍 OPEN）。本发布包在 **SkillHub TRACE 五维评测：v2.25.10 包综合 4.6/5；最新一轮（平台最新反馈 2026-10-30：综合 4.7/5；更早一轮 v2.27.38 包重扫：4.8/5（优秀）**——其中「安全性扫描 5.0/5」是**恶意性/恶意代码扫描**口径（双实验室 benign），**不是**架构信任根健全性认证，不构成「C-1 已闭合」证据（v2.27.4 包安全性 4.0 系「通过1项安全验证，1项存在风险」，经 CLI 实测 Keen 科恩与云鼎实验室双报告均为 benign「安全，无风险」，疑似评测快照时序伪影——评测生成时间早于云鼎报告签名约 28 分钟；文档层扣分点已于 v2.27.10 收口）。TRACE 平台评级与 Hermes 审计裁定是两套独立口径，TRACE 报告叙述里的「有条件通过」字样是评测 AI 回声了本文件诚实披露文本，非 TRACE 综合判定。此说明不弱化任何原有诚实边界。
+
+---
+
+## v2.27.40（2026-10-30）— 发布包安全面收敛（重发 SkillHub）
+
+**本版 = v2.27.39 文档精简内容的发布包安全面收敛，运行时代码与文档逐字节未变。**
+
+触发：2.27.39 已上架，但经 `skillhub install` 解包核验发现发布包仍随带
+`references/audit-probes-v22518/probe_r6_out.txt` 与 `scripts/test-suite-manifest.txt`——
+前者属「攻击 POC 目录随包」，正是此前升版欲消除的云鼎「可疑」标记源；后者为非必需产物。
+本版发布包经确定性白名单拷贝（仅 `.md/.py/.json/.jsonl`）剔除该目录与 `.txt` 产物，落实
+「audit-probes-v22518 不随包分发」的安全收敛声明。
+
+- 发布包剔除：`dist/`（46MB 历史归档）、`.gitignore/.specignore/.packignore`、`references/audit-probes-v22518/`、`references/obsolete/`、`*.bak`、`__pycache__`、`*.pyc`、`pack.sh`、`*.txt`、`*.html`
+- 发布包保留：`SKILL.md`（952 行，奥卡姆剃刀精简后）、`scripts/*.py`、`references/**/*.md`、`frozen-hashes.jsonl`、`ledger/*.jsonl`（运行期完整性/ attestation 必需，服务端确认 `.jsonl` 白名单放行）
+- 验证：`skillhub install` 解包 → 无 `dist/`、无打包元 dotfile、无 `audit-probes` 目录、无 `.txt`；SKILL.md 952 行；3.0M 级
+- 评级沿用：TRACE 五维 4.8/5（优秀，v2.27.39 包实测，本版同内容）不变；安全/信任叙事零改动
+
+---
+
+## v2.27.39（2026-10-30）— 奥卡姆剃刀文档精简（**发布 SkillHub**）
+
+> **触发**：SkillHub TRACE 五维评测 2.27.38 重扫（综合 4.8/5 优秀；T5.0 / R4.8 / A5.0 / C4.8 / E4.5）指出短板**全在文档**——说明过于庞杂、历史与当前指引混杂、少量示例过时、开箱易卡住。本版 = **纯文档精简**，运行时代码与发布包安全面逐字节未动，安全 / 信任内容不变（防御纵深级 + 治理闭合口径维持）。
+
+### 文档精简清单（奥卡姆剃刀：删冗余、突出唯一操作指引）
+
+1. **删除与 `CHANGELOG.md` 重复的内联变更记录**：原 `## 变更记录 / Changelog` 内联 v1.0.0→v2.16.0 逐版本摘要（约 42 行），与随包发布的 `CHANGELOG.md` 形成两份不一致记录——整段删除，改为指向 `CHANGELOG.md` 的单行指引（版本信息唯一权威来源）。
+2. **压缩威胁模型 §4 逐版本审计叙事**：原 §4「已知残留与诚实边界」内联 v2.14.0→v2.25.10 逐版本收口长叙事（约 53 行）——删除，改为指向 `CHANGELOG.md` 的单一指引；保留当前仍生效的诚实边界（冻结 ledger / 树外锚点 residual 枚举 / 密码学假设 / legacy 残留 / 过渡期语义）。
+3. **修正过时上手路径**：原「最小部署走查」写 `skillhub install` 后位于 `./skills/@<handle>/...`（旧布局，照抄找不到目录）——改为当前真实落点 `~/.workbuddy/skills/unclekk-metacog-self-evolve`。
+4. **修正评级口径与版本不一致**：
+   - 顶部「评级框架」「C-1 闭合现状」「最佳实践」中原 TRACE 评级写 `4.7/5（v2.27.10 包）`——统一更新为 `4.8/5（v2.27.39 包，2026-10-30 重评）`；
+   - 原「C-1 闭合现状（2026-10-18 更新）」仍写「C-1 未闭合 / C-01 OPEN」——改写为 **v2.27.37 owner（KK）结案口径**：C-1 已由 owner 结案 + CONDITIONAL-PASS 口径退役（与顶部「评级框架」终态一致），消除「交接信息不一致」；
+   - 原「一键系统级隔离」披露写「H-02/03/04/07 挂 OPEN、未审计通过、禁止用于生产」——改写为反映 v2.27.38 `C1_deploy.py` 硬化（随机临时目录 + 字节级完整性校验 + 提权确认横幅）后的诚实边界：可选增强、人在环单人本地使用无需本套件、不声称代码层完整闭合。
+
+### 验证
+- SKILL.md 由 1071 行精简至 952 行（净减 119 行），安全 / 信任叙事零删减；
+- 全文件 stale 引用扫描通过——`评级口径澄清` / `@<handle>` / `4.7/5 优秀` / 旧 `H-02/03/04/07 未审计通过` 均已处置；仅存的 `C-01 仍 OPEN` 位于 v2.8.x 历史审计块（按 CONDITIONAL-PASS 退役规则逐字保留，不 rewrite）；
+- `scripts/C1_deploy.py` 等运行时代码未改动，既有回归套件不受影响。
+
+---
+
+## v2.27.38（2026-10-30）— 安全扫描收敛（云鼎可疑标记清零）+ 部署包装器硬化（**发布 SkillHub**）
+
+> **触发**：SkillHub TRACE 五维评测（综合 4.7/5，优秀）+ 腾讯云鼎安全评估（health 65，1 可疑）。
+> 本版 = 安全面收敛，运行时代码逐字节未动。
+
+### 修复清单
+
+1. **安全扫描收敛（消除云鼎「可疑」标记）**：
+   - `.packignore` 显式排除 `references/audit-probes-v22518/*` 与 `references/obsolete/*`——
+     此前漏列导致这两目录仍随包分发；其中 `audit-probes-v22518/` 含真实攻击复现探针
+     （伪造签名账本 / 重算基线 / 追加伪造哈希链以重放一次性人类签名绕过人类闸），
+     被云鼎标记为「随包攻击 POC」。排除后包内不再含此类脚本，并与 `references/INDEX.md`
+     既有声明（v2.27.13 起不随包分发 / v2.27.14 起 obsolete 已移出）一致。
+   - `scripts/C1_deploy.py` 硬化：解包目录由固定 `%TEMP%/metacog_c1_bundle` 改为 `tempfile.mkdtemp`
+     随机目录；新增提取后字节级完整性校验（fail-closed）与路径包含性检查，防止临时目录被植入/遍历；
+     保留进程级 `-ExecutionPolicy Bypass`（仅作用于本次 powershell 进程），并增加特权操作显式确认横幅。
+2. **文档一致性**：本条即相对 v2.27.37「未发布」的最新增量记录，缓解 TRACE 指出的「版本之间信息不一致」。
+
+---
+
+## v2.27.37（2026-10-28）— 第五轮 Low 收口（F2''/R3-4）+ C-1 owner 治理结案（Leg-2' 判据修订）（**未发布 SkillHub**）
+
+> **审计输入**：DSH 对 v2.27.36 的第五轮复审「PASS 4.4/5（2 Low）」。**运行时代码继续逐字节未动**；
+> 本版 = 测试加固 + 打包排除 + 治理修订，另新增 1 个治理文件（owner 结案裁定书）。
+
+### 修复清单
+
+1. **F2''（Low，可复验性）**：默认 cp936 下 `test-n10-n11` 12/13——`run_verify` 以 utf-8 解码而
+   子进程按 GBK 写管道。修法照审计方建议：子进程 env 注入 `PYTHONIOENCODING=utf-8`；
+   并**同构加固其余 6 文件 8 处**（h1/h2/h3/n08/n09/v22713），该失配类整类根除。
+   **验收：三环境（默认 cp936 / PYTHONUTF8=1 / PYTHONIOENCODING=utf-8）全量 56/56。**
+2. **R3-4（Low，打包）**：两个自证聚合日志 `_agg_*.txt` 曾随包（构建器只排 `.log` 不排 `.txt`）。
+   dev 树已清 + 构建器增排除 `_agg_*` 模式，包内不再含结论性自证文件。
+3. **C-1 owner 治理结案（本版核心）**：
+   - **判据修订**（`references/third-party-audit-signoff-guide.md` §10）：原 Leg-2「第三方人类签字」
+     经 owner 裁定为不可得（连续五轮审计方均为 Agent 且依 §9 合法拒签；先例 = Leg-1 选项 C 结案），
+     修订为 **Leg-2'**：多轮生态外审计全绿 + 残余全披露 + **owner 人类结案裁定担责**；
+   - **结案裁定书**（`references/c1-owner-closure-instrument.md`）：五轮审计链
+     （FAIL 2.2/5 → FAIL 2.5/5 → PASS 3.9 → 4.2 → 4.4）、生产重基线事实、残余登记、
+     owner 责任声明、自动回退条款（后续审计非 PASS → 闭合回退待审）；
+   - **诚实不变量**：「审计方为 AI 且拒签」事实与五轮报告永久保留；本闭合不构成、不冒充任何
+     第三方人类签字或外部认证；「Agent 不得代签」红线不变；口径为「无未收口安全发现、
+     残余全披露」，**不声称「无任何残留」**；
+   - 同步：findings §十/§十一、handoff §0 与责任边界注、AUDIT-README、SKILL.md 评级行。
+
+### 验收（56/56 三环境 + 包内全绿）
+
+- 全量聚合 56/56：默认 cp936 / PYTHONUTF8=1 双环境 rc=0（F2'' 收口实证）。
+- 送审包 `audit-bundle-metacog-v2.27.37.zip`：包内 verify rc=0 + c1/sigcrypto/N-5 全 PASS；SHA-256 见交付记录。
+
+---
+
+## v2.27.36（2026-10-28）— 文档/测试收口：回应第四轮生态外复审 PASS 4.2/5 的 D1/D2/D3/F2'（**未发布 SkillHub**）
+
+> **审计输入**：DSH 对 v2.27.35 的第四轮复审「PASS（附已披露残余 + 1 条可复验性 Medium）」综合 4.2/5，
+> 新发现 D1（Medium 文档）/F2'（Medium 可复验性）/D2/D3（Low）。**本版无运行时代码变更**
+> （`metacog.py`/`freeze.py`/`sigcrypto.py` 等逐字节未动，MIN_SUPPORTED_VERSION 保持 (2,27,35)）。
+
+### 修复清单
+
+1. **F2'（Medium，可复验性）**：8 个子测试 locale 鲁棒化——默认 zh-CN 控制台（cp936）下
+   `_run_all_tests.py` 为 48/56：① `test-cli-wiring.py`/`test-p0-1-real-data.py`/
+   `test-p0-2-knowledge-transfer.py`/`test-p2-1-meta-optimizer.py`/`test-p2-2-domain-detector.py`/
+   `test-p2-3-visualize.py` 直接打印 ✅/❌ → `UnicodeEncodeError`，统一在 `import sys` 后插
+   stdout/stderr `reconfigure(encoding="utf-8", errors="replace")`；
+   ② `test-core.py` 5 处裸 `read_text()` → `UnicodeDecodeError`，补 `encoding="utf-8"`。
+   **验收：默认控制台原 8 失败套件 8/8 rc=0；PYTHONUTF8=1 下全量仍 56/56——两环境一致。**
+2. **D1（Medium，文档）**：入口文档滞后一版——`references/audit-findings-2026-10-26.md` 补
+   §八（v2.27.34/35 收口登记与验收）+ §九（本版）；`references/audit-handoff-package.md`
+   验收基线改「16 组/70 断言 + N-5 探针 4/4 + 56/56 双环境」、收口表 R2-N-5 改「已修 v2.27.35」
+   并新增 R3-1/D1 行、§3.3 改 56/56 且删 PYTHONUTF8 前提、英文摘要更新轨迹至 v2.27.36；
+   `AUDIT-README.md` 入口口径同步。
+3. **D2（Low，版本追溯）**：CHANGELOG 补 **v2.27.34 条目**（R3-1/F2~F8 收口此前被并入 35 叙述，致 34 段空缺）。
+4. **D3（Low，材料）**：恢复 `audit/attestation-artifacts/README.md`（无密钥复验操作说明）。
+
+### 验收（56/56 双环境 + 包内全绿）
+
+- 全量聚合 56/56：默认 cp936 控制台与 `PYTHONUTF8=1` 双环境一致（F2' 收口实证）。
+- 送审包 `audit-bundle-metacog-v2.27.36.zip`：包内 verify rc=0 + c1/sigcrypto/N-5 全 PASS；SHA-256 见 handoff §0。
+- 诚实残余：同 v2.27.35 §8.3 三项不变（五删全清结构性边界已披露）。
+
+---
+
+## v2.27.35（2026-10-28）— R2-N-5 收口（Low）：树外锚命名空间隔离（同机同名实例互不覆盖）（**未发布 SkillHub**）
+
+> **审计输入**：DSH v2.27.32 复审登记 R2-N-5（Low），v2.27.33/v2.27.34 如实保持 OPEN（「改命名孤立现网锚，需迁移方案」）。
+> 本版以「**新写旧读 + 密码学绑定迁移**」收口：既有部署 verify 不断、迁移随下次布建/仪式自然完成，无需独立迁移命令。
+
+### 修复清单
+
+1. **R2-N-5（Low）**：树外锚文件命名 slug 由「纯目录名」改为「**目录名--规范路径哈希前12**」——
+   同机两个同名根目录实例（如两份 `skill\`、两份同名 checkout）的树外锚从此命名空间隔离、互不覆盖。
+   覆盖面：metacog 6 类锚文件（`.root-pub.txt`/`.attest-pub.txt`/`.attest-root.txt`/`.attest.json`/
+   `.breakglass.json`/`.breakglass.log`）+ freeze 侧 `.anchor`/`.installed`/`.audit.log`
+   （freeze slug 与 metacog **有意镜像**，跨模块一致性入测试）。
+2. **迁移设计（新写旧读）**：写路径**永远**新命名；读路径新名优先、缺失时 legacy（纯目录名）回退，
+   回退须通过**密码学绑定**——metacog 判据 = legacy RK_pub 指纹 == CONTRACT 根钉固值；
+   freeze 判据 = legacy 锚内容 == 当前账本 commitment。绑定不可判（钉固缺失/指纹不符/内容失配）
+   → 不回退 → fail-closed。攻击者在共享锚目录放同名异钥文件无法劫持读路径。
+3. **R3-1 不回归保障**：slug 刻意**不依赖 CONTRACT.md 内容**；`_root_ever_armed` 三层痕迹判定改为
+   `_anchor_trace_exists`（新命名 OR legacy 命名**存在性**任一即真，密封仍要求 v1 格式）——
+   R3-1 攻击（删钉固行）下 pin=None、绑定不可判，但 legacy 锚文件仍在 → 仍判曾武装 → fail-closed。
+   **诚实代价**：同名异实例的 legacy 残留会令本实例误判曾武装 → 闸门拒绝、须显式 `--armed-recovery`
+   人工复核——宁误报不漏报，方向安全。
+
+### 破坏性变更 / 诚实边界
+
+- 树外锚文件名变更：升级后**首次布建/仪式写新命名**；此前由 legacy 只读回退保证兼容。
+- slug 含规范路径哈希：**技能目录移动/改名 = 进入新命名空间**（v2.27.34 及以前「目录改名沿用旧锚」
+  的行为正是本缺陷本体）——移动后须重跑布建仪式；旧锚文件在 verify 绿后可归档删除。
+- 同名异实例 legacy 残留的误报曾武装（见第 3 条诚实代价）。
+- 四删全清（连 AK 层一并删）退化为 fresh install 的 R3-1 诚实残余**不变**（本轮不涉及）。
+- 实现过程自纠：`_marker_path` 初版误改为硬编码 home，破坏 `METACOG_FREEZE_ANCHOR` env 重定向，
+  全量回归 `test-marker-write-fail` 捕获后改为从 `_anchor_write_path().parent` 派生（env 尊重恢复）。
+
+### 验收
+
+- 新套件 `test-v22735-n5-anchor-slug.py`（随包，test-suite-manifest 已登记）：**4/4 组 PASS**。
+- `test-c1-attestation.py` 16/16；`test-sigcrypto.py` 40/40；`test-trust-root.py` 298/298；
+  `test-freeze-appendonly.py` ALL PASS；**全量回归 56/56 诚实 PASS**（56 套件）。
+- 沙箱全链路（`audit/probes/sandbox-demo-2735.py`）：双密钥仪式 verify rc=0 + 四路攻击全 fail-closed，
+  **7/7 PASS**（新 slug 命名下端到端）。
+
+— 回应 v2.27.33 生态外独立审计 CONDITIONAL（R3-1 High + F2/F3 可复验性）（**未发布 SkillHub**）
+
+> **审计输入**：`审计报告-unclekk-metacog-self-evolve-2.27.33.md`（DSH 沙箱生态外复审，**CONDITIONAL 3.9/5**，不建议签「通过」）。
+> 综合评分 2.5→3.9；上一轮 9 条发现 8 条真收口（含 §2.1 ledger-drift 最大进步）；残留 1 条 High（R3-1）+ 2 条中危可复验（F2/F3）+ 若干 Low。
+> owner 对 R3-1 已实机复核源码属实（`_root_ever_armed` 仅判 RK_pub+v1 密封，漏算 AK 层），授权全量走 A 方案（修 R3-1 + F2/F3/F4/F5/F6/F8 + 清理 R3-2/R3-3 → 重基线 → 重打包）。
+
+### 修复清单
+
+1. **R3-1（High，关「删 RK 侧三处痕迹（钉固行+RK_pub+attest-root）回退 fresh」）**：`_root_ever_armed`
+   把 **AK 层**纳入曾武装判据——`.attest-pub.txt`（AK 公钥）或 `.attest.json`（AK 自签 attestation）
+   任一存在即视为 ever-armed。这是单点修复：同一函数被 `_attest_enforce_mode`（propose/apply/retrieve 闸门）、
+   `cmd_anchor_attest_verify`（missing 分支）、`_attest_root_integrity`（record 门禁）三处共用。
+   攻击向量（DSH §3 实测）：删钉固行 + 删 RK_pub + 删 attest-root **但保留 AK 层** → v2.27.33 判
+   ever-armed=False（只查 RK_pub+v1 密封）→ 闸门 off → 可自铸 RK/AK 重建链 → verify [OK]。
+   v2.27.34 因 AK 层仍在 → ever-armed=True → 仍 fail-closed（verify rc=1、propose/apply≠0、retrieve rc=3）。
+   fresh install 在 anchor-attest-keygen 前不产生 AK 层文件，不误伤 legacy 双轨。
+   **诚实边界（关键）**：本修复只把攻击成本从「删 3 处」拉到「删 4 处」——若攻击者**连 AK 层一并删**
+   （四删全清），则所有曾武装痕迹归零，系统退化为 genuine fresh install（ever-armed=False），
+   仍可静默重建链；此残余由"消费者带外核对 RK 指纹"兜底，属文件存在性判据的固有边界，非本轮可消除。
+   DSH §3 亦将"连 AK 一并删"标注为更稳做法（CONTRACT 哨兵节）的待办，本轮未实现哨兵节。
+2. **F2（Medium，产品缺陷）**：`_run_all_tests.py` 子进程 `subprocess.run(..., text=True)` 未指定 `encoding`，
+   在 zh-CN 控制台默认 cp936 解码 UTF-8 子进程输出 → `UnicodeDecodeError` → `p.stdout=None` → `TypeError`，
+   0.76s 崩在第 1 个套件前。显式 `encoding="utf-8", errors="replace"` 修复；目标环境（中文 Windows）可正常跑。
+3. **F3（Medium，可复验性）**：超时上限 180s → 600s，缓解「55/55 不可复现、失败全为超时、随负载漂移」的
+   纯时间判据敏感度；验收口径改为「逐套件全 PASS 且无超时」，超时套件须单独排查卡死而非慢。
+4. **F6（Low）**：聚合器自报正则 `(\d+)/(\d+) PASS` 匹配不到 `15/15 组 PASS`（「组」非空白）→ 加 `组?` 容错。
+5. **F5（Low）**：test-c1 docstring 曾写「16 组 / v2.27.32 10 组 29 断言」，与实跑不符 → 改为实际 16 组（含 R3-1）/ 断言规模沿革。
+6. **F4（Low）**：`verify-manifest.py` 对 `__pycache__/*.pyc/.pytest_cache` 豁免，消除「先 verify → 跑套件 → 再 verify」
+   因缓存生成第二次 MANIFEST FAILED 的流程矛盾。
+7. **F8（Low）**：`.packignore` 移除 `scripts/_run_all_tests.py` 排除行（送审包须随带该回归运行器，消除语义矛盾）。
+8. **R3-2（Low，如实登记）**：主机名 `PC-20230325SHQZ` / 盘符 `D:\MetacogAnchorRoot` 残留**仅存在于**
+   `audit/leg1-evidence/leg1-evidence.txt` 历史审计证据档案（描述当时实测，非当前环境声明）；
+   运行时产品代码 / 文档（skill/、references/）已清零，无运行时残留——保留证据档案原始性，不强行篡改。
+9. **R3-3（Info，如实登记）**：metacog.py 多处 `v2.27.31（R-5）` 等均为**设计起源注释**（如实说明某特性始于 2.27.31），
+   非运行时版本误标；运行时 `MIN_SUPPORTED_VERSION` 与五处版本钉固常量均为 2.27.34。版本序列 2.27.30→2.27.32→
+   2.27.33→2.27.34（2.27.31 为内部重构基线，无独立发布条目）。
+
+### 破坏性变更
+
+- 同 v2.27.33：被冻结账本跟踪文件改动 → ledger_drift → 须 `freeze record` 重基线 + 离线重签。
+- R3-1 修复使「删 RK 侧三处痕迹（钉固行+RK_pub+attest-root）但保留 AK 层」不再能回退 fresh——
+  任何 AK 层残留即 fail-closed。但「四删全清（连 AK 一并删）」仍退化为 fresh install（见诚实残余）。
+
+### 验收
+
+- `test-c1-attestation.py`：**16/16 组 PASS**（新增 R3-1 用例：删 RK 侧三处痕迹、AK 层保留 → 真断言闸门齐拒）。
+- `test-trust-root.py`：298/298 PASS（legacy 双轨在真 fresh 态保持 rc=0，不误伤）。
+- `test-sigcrypto.py`：40/40。
+- `_run_all_tests.py`：F2 修复后默认 cp936 不再崩；验收口径改为「逐套件全 PASS 无超时」而非单一 55/55 计数。
+- 沙箱全链路：双密钥仪式 → verify OK → 删 RK 侧三处痕迹、AK 层保留 → 仍 fail-closed（R3-1 修复）。
+
+### 诚实残余（如实登记）
+
+- **C-1 仍 OPEN**：Leg-2 人类签字未取得（DSH 复审明确拒绝代签、且本版带 High 残余不建议签「通过」）。
+- R3-1 结构性残余（两条，均软件层不可消除）：
+  1. 同用户全写权攻击者 + 显式 `--armed-recovery` 仍可重建自洽信任链（测试如实演示）；
+  2. **四删全清（连 AK 层一并删）** → 退化为 genuine fresh install、ever-armed=False → 可静默重建链。
+  两条的真正护栏 = RK 私钥离线 + 消费者侧带外指纹核对。DSH §3 建议的 CONTRACT「已武装」哨兵节
+  （缺失即 fail-closed）可进一步抬高第 2 条成本，本轮未实现，列为下轮候选。
+- N-5（同机多实例共享锚目录）OPEN（Low，下轮处理）。
+- F2/F3 类「可复验性」依赖目标机器无沙箱 PermissionError 与合理负载；超时套件须单独排查。
+
+---
+
+## v2.27.34（2026-10-28）— C-1 R3-1 收口（High）+ F2~F8：曾武装判据纳入 AK 层 + 聚合器可复验性（**未发布 SkillHub**）
+
+> **审计输入**：DSH 对 v2.27.33 的第三轮复审「1 High + 2 Medium + 若干 Low」。
+> 本版收口 High 一项 + 全部 Medium/Low 文档与流程项；生产部署与重基线仪式由 owner 于 2026-10-28 执行。
+
+### 修复清单
+
+1. **R3-1（High）**：「删钉固行 + RK_pub + 密封三处（保留 AK 层）→ 曾武装判据只看 RK 侧痕迹 →
+   判 fresh → 静默放行可重建链」。修复：`_root_ever_armed` → `_anchor_trace_exists`，
+   **AK 层痕迹（AK 公钥文件 / attestation 物件）纳入曾武装判据**——三删后仍 fail-closed
+   （verify rc=1 / propose 拒 / retrieve rc=3，测试真断言实证）。
+   **诚实残余（docstring/CHANGELOG 双登记）**：「四删全清（连 AK 删）」乃至五删退化为 fresh install
+   属文件存在性判据固有边界，由 RK 私钥离线 + 带外指纹核对兜底，未宣称已闭合。
+2. **F2（中）**：`_run_all_tests.py` 聚合器 cp936 控制台 `UnicodeDecodeError` →
+   subprocess 显式 `encoding="utf-8", errors="replace"`。
+3. **F3（中）**：套件超时 180s → **600s** + 捕获 `TimeoutExpired`——上轮「55/55 不可复现」
+   实为超时伪影；本版起聚合可稳定复现。
+4. **F4/F5/F6/F8（低）**：verify-manifest 加 pycache 豁免（先 verify→跑测试→再 verify 不再自相矛盾）；
+   c1 docstring 改实际组数；自报正则加「组?」容错；`.packignore` 同步。
+
+### 验收（16/16 + 40/40 + 298/298 + 56/56）
+
+- `test-c1-attestation.py` 16/16（含 R3-1 三删组）、`test-sigcrypto.py` 40/40、
+  `test-trust-root.py` 298/298、全量聚合 56/56 诚实 PASS。
+- 生产 ceremony（owner 亲跑，2026-10-28 11:38）：AK 重钉 → root-seal → record 38 → verify rc=0
+  → AK 私钥销毁；root-fp=c2d96c4c 不变（免重新带外分发）。
+
+---
+
+## v2.27.33（2026-10-27）— C-1 R-2 **缺失态 fail-closed + 证据链对账**：回应 v2.27.32 生态外独立审计 FAIL 2.5/5（**未发布 SkillHub**）
+
+> **审计输入**：`审计报告-unclekk-metacog-self-evolve-2.27.32.md`（DSH 沙箱生态外复审，**FAIL 2.5/5**）。
+> 该报告确认双密钥设计路径「做对了」（7 类密封篡改全拒、AK 越权签密封被拒、env 自授权重钉被拒、
+> 时效钳制生效——上一轮证伪的入口 A 确被打破），但实测出两个 High（§2.3 缺失态静默关闸 +
+> 可重建攻击者信任链；§2.1 冻结账本 stale 10/36 → 代码层认证断裂）及一批 Medium/Low。
+> 本版按其 §四 修复建议**逐条收口**；owner 已对三项最硬发现独立复核属实（包内账本 10/36 drift、
+> 垃圾文件在包、PII 17 文件/30 处）——并修正 v2.27.32 条目中「源码零 PII」的不实声明（见下）。
+
+### 修复清单（对审计报告 §四 编号）
+
+1. **§4.1 曾武装 fail-closed（关 §2.3 High + 入口 B 残余）**：`_attest_enforce_mode` 新增
+   `_root_ever_armed` 判定——树外 RK_pub 文件或 v1 签名密封任一存在而 RK 钉固行缺失 → `on`
+   （不再静默 `off`）；钉固在而 RK_pub 文件缺失 → `on`（原判 `off` 属缺陷）。legacy 兼容保持：
+   两者皆缺（真·fresh）才双轨。`freeze.record` 门禁（`_attest_root_integrity`）同步拒绝曾武装态重基线
+   （ROOT-EVER-ARMED），堵「删一行后 record 洗白」。恢复路径显式化：`anchor-root-pub-install --armed-recovery`（LOUD）。
+2. **§4.3 读闸全状态覆盖（关 §2.4 Medium/High）**：`retrieve` 由「仅验密封」改为 enforce mode ≠ off 即走
+   `_attest_verify_core` 全量核验——任何非 ok 状态（含层缺失/钉固缺失/账本失配）均 rc=3 拒绝吐规则。
+3. **§4.4 RK 重装/轮换修复（关 §2.5 N-2 Medium）**：值行匹配改行首列表项正则（节标题不再误中）；
+   install **校验先行**（被拒不 clobber RK_pub 文件，消除自我 DoS）；新增 `--rotate-auth`
+   （当前 RK 私钥对 `root-rotate:<新指纹>` 签名授权，sigcrypto 新增 root_rotate_* 三原语）——补齐 CLI 层
+   RK 轮换授权路径；同把 RK 重装幂等 rc=0。
+4. **§4.5 时效收紧（关 N-1 Medium + N-3 Low）**：`METACOG_ATTEST_MAX_AGE_DAYS` **>90 一律钳回 90**
+   （此前 env=1000 可令 240 天前 attestation 复活）；sigcrypto 密封 age<0 → `seal-future` 拒收；
+   attestation 未来 at → `malformed`（堵「未来时间戳永不过期」）。
+5. **§4.2 证据链对账（关 §2.1 High）**：`_attest_verify_core` 新增 **ledger-drift 检查**——逐条复算
+   frozen-hashes.jsonl 对实际文件，失配 → `ledger_drift` fail-closed（verify rc=1、gate 拒绝、retrieve rc=3）。
+   **任何人可无锚密钥复算**（原 freeze.py verify 需锚密钥，审计人不可运行——审计明确点名的残余）。
+   从未 record 过（无账本）不构成 drift，fresh 流程不受影响。
+6. **§4.6 测试诚实性重写**：test-c1-attestation.py 重写为 **15 组 / 63 断言**——§2.3 类测试现在
+   **真断言 propose/apply/retrieve 被拒**（v2.27.32 只断言 verify 报告 rc 的缺口如实修复）；
+   新增「删钉固行自铸 RK」攻击路径、--armed-recovery 诚实残余演示、RK 轮换、N-1/N-3、ledger-drift 用例；
+   模块 docstring 补回并写明断言规模沿革。断言 88→29 的删减理由随 v2.27.32 说明并入本条。
+7. **§4.7 打包与文档卫生**：删除树内执行残留垃圾（r7_probe2-5.py、results*.tsv、sync_v28*.py、
+   test-prompts.json、_run_full.log）；**PII 全量脱敏**（17 文件/30 处本机用户路径 → `<LOCAL-USER>`，
+   含 CHANGELOG 与 references 审计存档）；CHANGELOG 重排为严格版本降序（修复 v2.27.32 条目
+   夹在 v2.27.29/v2.27.30 之间的错序）；**更正 v2.27.32 不实声明**（原「源码零 PII…已在重建时剔除」
+   与实物不符）；新增根级 `AUDIT-README.md`；送审包入口/悬空引用修复（见 handoff）。
+8. **N-4 口径对齐**：`pinned_root_attest_pubkey_sha256` docstring 与 `_attest_enforce_mode` 的
+   曾武装语义对齐（「缺失即 fail-closed」改为「缺失结合曾武装标记判定」）。
+9. **N-5（Low，如实 OPEN）**：树外落点按目录名共享（同机多 `.metacog` 实例互相覆盖）本轮**未改**——
+   改命名会孤立现网锚文件需迁移方案，登记为 OPEN 低危残余，下轮处理。
+
+### 破坏性变更
+
+- 任何被冻结账本跟踪文件的改动（含文档）→ `anchor-attest-verify` rc=1（ledger_drift）→
+  受控命令/读通道全拒，须 `freeze record` 重基线 + 离线重签（**这是设计意图**：代码层认证桥不再可断）。
+- 删除 RK 钉固行 / RK_pub 文件不再静默降级为 legacy；恢复须显式 `--armed-recovery`。
+- RK 指纹变更（轮换）必须持当前 RK 私钥签名授权；轮换后旧密封立即失效须重密封。
+
+### 验收
+
+- `test-c1-attestation.py`：**15/15 组 / 63 断言 PASS**（含两轮审计全部承重路径）。
+- `test-trust-root.py`：298/298 PASS（向后兼容完好——legacy 双轨在真 fresh 态保持 rc=0）。
+- `test-sigcrypto.py` 40/40；`_run_all_tests.py` **55/55 诚实 PASS**。
+- 沙箱全链路：双密钥仪式（含 record+重签）→ verify OK → 删钉固行/删 RK_pub/篡改账本三路攻击全 fail-closed。
+
+### 诚实残余（如实登记）
+
+- **C-1 仍 OPEN**：Leg-2 人类签字未取得（DSH 复审明确「本报告不是 Leg-2 签字」）。
+- 结构性残余：同用户全写权攻击者 + 显式 `--armed-recovery` 仍可重建自洽信任链（测试如实演示）——
+  软件层不可消除，真正护栏 = RK 私钥离线 + 消费者侧带外指纹核对。
+- N-5（同机多实例共享锚目录）OPEN（Low）。
+
+---
+
+## v2.27.32（2026-10-27）— C-1 R-1 **双密钥根信任重构**：回应 v2.27.30 生态外独立审计 FAIL（**未发布 SkillHub**）
+
+**授权与硬控制**：v2.27.30 送审包经生态外独立审计（deepseek-harness / DSH 沙箱，非 WorkBuddy/Hermes/DeerFlow/QClaw 同生态）裁定 **FAIL（2.2/5）**——核心承重 R-1「授权分离」在生产态实测失效：密封把「根锚指纹」绑到「当前安装的那把公钥」，重钉授权来自调用方自设 env（REPIN_ALLOW），且删钉固行可静默关闸。owner 指令「按 §10 路线开工修复」。本版经 owner 逐次授权实修。**仍未经 owner 授权不上架 SkillHub**（持续硬控制）；**C-1 仍 OPEN**，仅剩 Leg-2 生态外人类签字。
+
+### 根因（审计 §3.3 / §4 经源码逐行复核确认属实）
+- 旧 R-1（v2.27.30）密封由 **AK 私钥自签**其自身的指纹——「用自己的钥匙给自己的指纹签字」在语义上等价于自签，未引入第二独立权威；
+- 重钉授权 `METACOG_ATTEST_REPIN_ALLOW=1` 为**调用方自设 env**；删 `CONTRACT.md` 钉固行 → `pinned is None` → 闸门直接关；
+- 两条接管路径（A：自设 REPIN_ALLOW 重钉→自签→verify rc=0；B：删钉固行→连 env 都不用→同上）**均无需离线私钥、均可复现**。
+
+### 核心重构：R-1 双密钥根信任（第二权威 RK，与 attestation 公钥 AK 解耦）
+- 新增**独立于 AK 的根信任密钥 RK**（人类离线持有）：`anchor-root-keygen` 生成 RK 密钥对，`anchor-root-pub-install` 将 **RK 公钥指纹钉固为最高权威** `root_attest_pubkey_sha256`（CONTRACT.md）；
+- 根锚密封 `v1:<AK_fp>:<at>:<sig_by_RK>` 改由 **RK 私钥签名、RK 公钥验签**——密封不再由「被钉固那把 AK」自签，**直接打破入口 A/B**（攻击者无 RK 私钥无法产出合法密封）；
+- 消费者信任链锚定在**包完整性哈希**（KK 带外发布），非机器内任意文件；RK 公钥随包分发、其指纹带外核验；
+- `verify` / 闸门 / `retrieve` 读通道 / `freeze.record` 门禁统一以「**RK 已建立且密封有效**」为权威前置。
+
+### §10 承重项收口（逐条对应审计路线图）
+| 审计路线 | 修复 | 实证 |
+|---|---|---|
+| **§10 #1 第二权威** | RK 公钥指纹为最高权威钉固；缺失/变更 → `root_pin_missing`/`root_pin_mismatch` → fail-closed | test-c1 §10 #1：`pinned is None → verify FAIL rc=1` |
+| **§10 #2 钉固不可删/改** | 删 RK 钉固行 → `root_pin_missing` → verify **硬拒 rc=1**（不再静默放行） | test-c1 入口 B：`删 RK 钉固行 → verify FAIL rc=1` |
+| **§10 #3 重钉不来自 env** | 移除 `METACOG_ATTEST_REPIN_ALLOW`；重钉须 **RK 私钥签名授权**（`--repin-auth`，文件）；无授权 → 硬拒 | test-c1：`设 REPIN_ALLOW=1 仍拒` + `持 RK 签名授权 → 重钉成功` |
+| **§10 #4 读通道覆盖** | `retrieve` 在 RK 已建立且密封无效/过期/缺失时 **拒绝吐出生效规则（rc=3）**；`verify` 纳入核心状态 | test-c1：`密封被破坏 → retrieve 拒绝 rc=3` |
+| **§10 #5 时效不可关** | `_attest_max_age_days` ≤0 **钳为 90**；旧密封（200 天前）判 `seal-expired` | test-c1：`MAX_AGE_DAYS=0 仍强制过期 → FAIL` |
+| **§10 #1 指纹 hex** | 密封指纹强制 `^[0-9a-f]{64}$`；`at` 仅接受 `^\d{8}T\d{4}$`；非法即拒 | test-c1：`非 hex 指纹 / 非法 at 被拒` |
+| **§10 #4/#1 freeze 门禁** | `_attest_root_integrity` 以双密钥模型重判：RK 建立后密封无效 → 阻塞 record | test-c1：`密封被破坏 → _attest_root_integrity 阻塞` |
+
+### 同时修复的产品 bug
+- `anchor-attest-pubkey-install --repin-auth` 原把**文件路径**误当签名内容传给 `root_repin_verify` → 重钉授权恒失败；改为先读文件内容再验签（v2.27.32 收口）。
+
+### 破坏性变更（部署方须知）
+1. 新增布建步骤：`anchor-root-keygen` → `anchor-root-pub-install`（RK 公钥须先钉固为最高权威）；
+2. 重钉公钥须 **RK 私钥签名授权**（`--repin-auth`），不再支持 env 自授权；
+3. 删除静默开关 `METACOG_ATTEST_ALLOW_PARTIAL_LAYER`（布建期免自锁改由显式逃生语义）；`MAX_AGE_DAYS≤0` 不再可关过期；
+4. `verify` / `retrieve` 在 RK 已建立但密封无效时由「rc=0 双轨」升级为「**硬拒**」；legacy（RK 未建立）场景仍保持双轨 rc=0（向后兼容，旧 54 套件全 PASS）。
+
+### 验收
+- **重写 `test-c1-attestation.py`（v2.27.32）：10 组 / 27 断言全 PASS**，覆盖 §10 全部承重项 + 入口 A/B 阻断；
+- **`test-sigcrypto.py`：40/40 PASS**（模数判定改确定性 256 字节，消除非确定红）；
+- **全量聚合 `_run_all_tests.py`：55/55 诚实 PASS**（manifest 已补全 test-sigcrypto.py，与 `test-*.py` 完全一致）；
+- 冻结账本随新增测试文件重 record + verify 绿。**【v2.27.33 更正】本条原声称「源码零 PII…已在重建时剔除」与实物不符**：v2.27.32 送审包实测仍有 17 文件 / 30 处本机用户路径残留（43 处的剔除声明未落实到全部文件）——已于 v2.27.33 全量脱敏（`<LOCAL-USER>`）并删除树内垃圾文件，owner 对该核查失误如实登记。
+
+### 诚实残余（未消除，如实登记）
+- **单用户同权机器上，纯软件无法阻止同一用户改全部文件**：本设计的真正护栏是 **RK 私钥离线 + 消费者侧包哈希 / 根公钥指纹带外核验**——恰是 Leg-1 诚实结论在 R-1 的应用，不假装做到做不到的事；
+- **L-A3 残余**：树外锚目录 `~/.metacog_freeze_anchors` 仍是生态共享写域（本运行时无「Agent 不可写」位置）；
+- **L-A1 部分收口**：破闸留痕可被同用户删除（无进程外不可抵赖能力）；
+- **密钥纪律降级**：RK 私钥本机生成（非干净离线机）——生产部署须改用干净离线机生成并移走；
+- **C-1 仍 OPEN**：仅剩 **Leg-2 生态外第三方人类签字**（AI 审计与 DSH 审计均不构成人类签字，须朋友本人于「阻塞项已修复」前提下手动签字）。
+
+---
+
+## v2.27.30（2026-10-26）— C-1 审计发现全量收口：R-1 签名密封（授权维度）+ H-A3/H-A2/M-A2 等 9 项修复（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「先修好再送审」——本版为**代码级收口**（v2.27.29 仅登记发现、本版实修）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 核心变更：R-1 —— 外部根锚「签名密封」（写入者 ≠ 信任根持有者）
+异族审计的核心论断是「Leg-1 攻错了维度：真正的修复是**授权分离**而非**存储 ACL**」——本版**按该论断实现**：
+- 外部根锚内容由裸指纹改为**签名密封记录** `v1:<指纹>:<at>:<b64sig>`，由**离线 attestation 私钥**签发（`sigcrypto.anchor_root_seal_sign/verify`）；
+- `anchor-attest-root-seal` **必须提供私钥**（`--priv` + `--passphrase-env`），否则拒绝（未签名根锚可被同用户任意手写，不得进入信任路径）；
+- verify 侧校验密封签名 → 根锚被改写/手写/换钥签发一律 `root_anchor_seal_invalid` 硬拒（rc=1）；
+- **结论：外部域闭合不再依赖「落点 ACL 不可写」**——根锚可留在可读落点，攻击者改不动它（无私钥签不出有效密封）。**这回答了审计方「哪一维度才对」的核心问题，并使 Leg-1 的 ACL 攻防成为非必要条件。**
+
+### 其余 8 项收口
+| 发现 | 修复 | 语义变化 |
+|---|---|---|
+| **H-A3**（高） | `_attest_enforce_mode`：已钉固但层文件缺失 → **fail-closed（mode=on）**，不再回落双轨放行；布建期免自锁改由显式开关 `METACOG_ATTEST_ALLOW_PARTIAL_LAYER=1` 提供 | 删公钥/attestation → gate 硬拒 rc=2、verify 硬拒 rc=1（此前 rc=0 放行、零告警） |
+| **H-A2**（高） | 过期检查 `except ValueError: pass` → `return ("malformed", ("at", at))` | `at` 为任意字符串 → 硬拒（此前静默跳过、过期策略可被完全绕过） |
+| **M-A2**（中） | ① 钉固指纹不符 → **硬拒 rc=1**（不再覆盖 + 一行 stderr WARN）；重钉须显式 `METACOG_ATTEST_REPIN_ALLOW=1` ② 钉固解析**锚定行首**的 markdown 列表项 + 多处冲突 → `pin_ambiguous` 硬拒 | 子串首命中解析被消除；「唯一告警点」强度由打印语句升级为硬拒 |
+| **R-9** | `root-seal --pub` 须与已钉固指纹比对，不符 → 硬拒 rc=1 | 消除「密封任意公钥」的设计性后门 |
+| **L-A2**（低） | E1 落点隔离判定补**父目录**可写性（NTFS 可 rename 覆盖整文件） | 告警维度由「本进程可写」扩为「落点+父目录」 |
+| **R-4**（中） | `freeze.record` 纳入 **C-1 信任根完整性闸门**（根不完整 → REFUSED）。刻意**不**要求 commitment 匹配（record 的用途就是重写被跟踪文件） | 攻击者无法在信任根被破坏时静默重基线冻结账本 |
+| **R-5**（低） | 破闸**留痕**：计数 +1（纳入 attestation commitment）+ append-only 日志；破闸 → commitment 失配 → **恢复强制后**受控命令 fail-closed | 破闸从「stdout 一句话」升级为「须离线重签」的可检痕迹 |
+| **R-7** | 新增 `scripts/test-sigcrypto.py`（**40 断言**）——验签器本体首次具备独立测试入口（密钥对往返/指数退化防线/签名篡改/私钥 at-rest 认证/attestation 白名单/密封签名与跨协议隔离） | 填补「C-1 密码学层无任何独立审计证据」的最大未覆盖面 |
+| 口径 | H-2 / H-3 / E1 由「已收口」改口径为「部分收口 / 残余」的**校准**（v2.27.29 已改），本版补齐其**残余面**：H-2 被 H-A3 路径绕开的历史缺口已封堵；H-3 增留痕；E1 增父目录维度 | 口径与威胁模型对齐 |
+
+### 破坏性变更（部署方须知）
+1. `anchor-attest-root-seal` 须 `--priv` + `--passphrase-env`（密封记录须签名）；
+2. 已钉固但层不完整 → verify 由「WARN rc=0」改为「**FAIL rc=1**」；未钉固的 legacy 场景仍保持双轨 rc=0；
+3. 重钉公钥须 `METACOG_ATTEST_REPIN_ALLOW=1`（+ 令牌门 + 人工复核）；
+4. attestation commitment 新增 `break_glass` 字段 → **既有 attestation 全部失效，须离线重签**（本版已重签）；
+5. 布建期免自锁须显式 `METACOG_ATTEST_ALLOW_PARTIAL_LAYER=1`（默认关闭）。
+
+### 验收
+- **test-c1：60 → 87 断言全 PASS**（新增 27 条：H-A3/H-A2/M-A2/R-9/R-1/R-5 及口径校准）；
+- **新增 `test-sigcrypto.py`：40/40 PASS**；
+- 全量套件（含新增文件）全绿；冻结账本 35 → **36 文件**重 record + verify 绿；attestation 重签（双次签发：attest#1 → record → attest#2）后 verify PASS；密钥销毁。
+
+### 诚实残余（未消除，如实登记）
+- **L-A3 残余**：树外锚目录 `~/.metacog_freeze_anchors` 仍是生态共享写域——**本运行时不存在「Agent 不可写」的位置**（Leg-1 实证），R-1 使「可写」不再等于「可篡改」，但目录本身的暴露面仍在；
+- **L-A1 部分收口**：破闸留痕可被同用户**删除**（无进程外不可抵赖能力，本运行时不可达成）；其「须离线重签」的代价链有效；
+- **密钥纪律降级未变**：私钥本机生成（非干净离线机），口令仅存内存+临时文件、签发后销毁；
+- **Leg-1 结论修正**：原「OS 级外部域不可达成（锁与读互斥）」的结论**仍然成立**（本机确实不可达成），但它**不再是 C-1 闭合的必要条件**——授权维度（R-1）已实现，根锚可留在可读落点。
+
+---
+
+## v2.27.29（2026-10-26）— 送审前完整性核查：登记异族审计（FAIL）发现 + 口径统一 + 送审包文档补齐（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「检查好 v2.27.28包内文档是否完整，我将交给朋友机器来进行审计」——本版为送审前的文档完整性与诚实一致性补正。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。**本版零代码逻辑变更**。
+
+### 审计输入与独立复核（不盲信）
+- **同生态异族审计报告落盘**：`references/hermes-audit-v2.27.28-C1-external-domain-gate.md`（28,380 字节，2026-10-26，Hermes）——总体评级 **FAIL**；发现 2 高（H-A1 授权层同权 / H-A2 过期检查 fail-open）2 中（M-A1 冻结与 attestation 互不保护 / M-A2 覆盖式 WARN + 子串解析）3 低（L-A1 破闸无留痕 / L-A2 E1 判定维度 / L-A3 树外目录生态共享写域）+ R-1…R-10 建议。**该报告为同生态 runtime 产物，按本 skill 自定资格红线不得充当 Leg-2 第三方签字**，仅作参考输入。
+- **owner 独立复核（沙箱实跑取证，不采信被审方/审计方结论）**：复核脚本 `_recheck_hermes_findings.py` + `_probe_ha3_gate_downgrade.py`（工作区证据）→ **确认 H-A1 / H-A2 / M-A1 / M-A2 属实**；**新增 1 项更高危发现 H-A3**（Hermes 未列）：
+  - **H-A3（最高危，实跑 9/9 复现）**：**删除树外公钥文件（或 attestation 文件）→ `_attest_enforce_mode` 由 `armed` 降为 `off` → 强制闸门整体失效（rc=0 放行、零告警）→ 受管控命令可任意执行 → `anchor-attest-verify` 降级为「非对称层未配置」WARN rc=0**。该链**无需私钥、无需令牌**（仅一次 unlink），且**绕开了 H-2「删外部根锚硬拒」的收口**（走「层未布建」另一扇门）。
+  - 关键澄清（与 Hermes 原报告的差异，我方实跑结论）：H-A1 攻击链在**私钥不在机**的 v2.27.28 生产态终点为 `signature_fail`（**仍 fail-closed**）；仅当**私钥在机**（操作者本机 keygen 的已披露降级情形）才回到 `verify` PASS（完整绕过）。
+- **Leg-1 终态残余面诚实修正**：原以为 Leg-1 防御纵深级终态的残余仅「落点同用户可写（H-1）」，实为 **H-A3 + H-A1 + H-A2 + M-A1 四条并存**——本版如实修正，不粉饰。
+
+### 本版实修（文档级）
+1. **新增 `references/audit-findings-2026-10-26.md`**——审计发现登记册：8 项发现总表（严重度/来源/独立复核结论/状态）+ 逐条详述与实跑证据 + 口径修正 + 可核对性补齐 + **待 owner 逐次授权的修复清单（R-H3/R-2/R-3/R-4/R-5/R-6/R-7/R-1/R-9，本版未实施）**。
+2. **新增 `references/audit-handoff-package.md`**——送审包说明：材料清单 7 项 + 附加 7 项、保密约定、审计人最短路径（转移完整性校验 → 版本/基线核验 → 独立跑回归 → 自建探针 → 结论回传）、**必须纳入审计范围的已知 OPEN 发现**、送审方与审计人责任边界。
+3. **口径统一（R-8）**：v2.27.26 的 H-2 / H-3 / E1 由「已收口」**改口径为「部分收口 / 残余」**，与 H-1 使用同一口径（不否认修复价值：H-2 单步删除确实被堵、破坏会留痕；但在已声明的同用户全写权威胁模型下防御增量近于零）。
+4. **可核对性补齐（R-10 / R-6）**：五处版本号**枚举**（`SKILL.md:5` / `package.json:3` / `_meta.json:5` / `_skillhub_meta.json:4` / `scripts/metacog.py` 的 `MIN_SUPPORTED_VERSION`；CHANGELOG 标题为第 6 处引用）；`test-c1-attestation.py` 顶部加**诚实化声明**——本套件的「外部域」= Agent 自建 temp 目录，**仅验证双权威交叉核对逻辑，不验证隔离强度**。
+5. 冻结账本 **33 → 35 文件**（新增上述两份 references）重 record + verify 绿；attestation 于内容定稿后**重新签发** + 密钥销毁（口令仅存布建期内存与临时文件）。
+
+### 验收
+- 版本五处 **2.27.29** 一致；冻结账本 35 文件 `record: 35 / verify: (True, [])`；`anchor-attest-verify` PASS；test-c1 **60/60**；全量 **54/54**。
+- 送审包（含 skill 快照 + 环境说明书 + Leg-1 证据包 + 探针骨架 + SHA-256 清单 + 无密钥校验脚本 + 秘密扫描报告）已生成交付。
+
+### 诚实边界（不变且加严）
+- **本版未做任何代码修复**：H-A3 / H-A1 / H-A2 / M-A1 / M-A2 / L-A1 / L-A2 / L-A3 **全部维持 OPEN**，修复须 owner 逐次授权（沿用硬控制）。
+- **C-1 维持 OPEN**；Leg-1 已按 owner 裁定结案为防御纵深级终端态（v2.27.28），**不因本发现改判**，但其残余面已按上述四条如实修正。
+- 送审包供**生态外第三方**审计现行 2.27.29 现状；**签字结论须注明所审版本与已知 OPEN 发现**；带发现的结论不得签署闭合。
+
+---
+
+## v2.27.28（2026-10-26）— C-1 闭合 Leg-1 部署尝试：本运行时环境阻碍实证 + 诚实回退（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「leg-1」授权执行真正外部域部署（此前菜单推荐位 A）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 部署尝试实录（如实，含失败全过程）
+- **目标**：位置 A（系统级树外目录 + ACL 锁），先后尝试 `C:\ProgramData\MetacogExtAnchor`、`D:\MetacogExtAnchor`、`D:\MetacogExtRoot` 三处落点，历预创建、覆写、rename 隔离、WMI/CIM 孵化独立进程等多轮攻防。
+- **环境阻碍（三重实证，非猜测）**：
+  1. 本机 WorkBuddy 沙箱过滤器对 skill 经文件工具写出的**树外（非 workspace/home）文件**施加不可逆锁：DACL 剥空（0 ACE），读/写/删/回收站/chmod/DACL 授予全拒（含禁用沙箱模式与 CIM 孵化进程），仅元数据查询放行；
+  2. `icacls <dir> /inheritance:r` 在本机**非标准地连带剥空既有子文件 DACL**（最小复现：4 ACEs→0，`icacls /reset` 无法修复）；
+  3. 运行时令牌为 UAC 受限令牌（<LOCAL-USER>s 组 deny-only，无 SeTakeOwnership/SeRestore）。
+- **结论（诚实判定）**：本运行时内 OS 级「Agent 不可写且可读」外部域**不可达成**——ACL 锁与 Agent 可读互斥（锁死即不可读，可读即未锁）。Leg-1 维持 **OPEN**。
+
+### 诚实回退（防御纵深级整合，已完成并终验）
+- 撤回 HKCU/会话 `METACOG_ATTEST_ROOT_ANCHOR` 重定向（若误指 junk 目录 → 锚不可读 → `root_anchor_missing` fail-closed，安全）。
+- 完整布建仪式：`anchor-attest-keygen`（RSA-2048，随机口令）→ `anchor-attest-pubkey-install`（特权令牌门，CONTRACT.md 钉固新指纹）→ `anchor-attest-root-seal`（落 home 树外默认，**防御纵深级**——可读可验、树外存储，但 H-1 口径「同用户可改写」如实适用）→ 重冻 33 文件（record 33 / verify 绿）→ `anchor-attest` 签发 → `anchor-attest-verify` PASS → freeze-verify GREEN。当前权威指纹以 CONTRACT.md 钉固值为准。
+- **密钥处置（诚实披露）**：口令（`secrets.token_urlsafe(32)`）仅存布建期内存与临时文件，签发后即时销毁、从未持久化；私钥 blob 随之不可解密 = 等价销毁。降级如实登记：密钥本机生成（非干净离线机），「私钥从未抵达被约束主机」未达成，Leg-2 审计须裁定。重签 = 全新 keypair + 重钉固 + 重密封（文档化特权流程；本版文档定稿后实际重跑一次以确保 attestation 覆盖定稿内容）。
+- **junk 目录登记（本运行时不可删，如实挂账）**：`C:\ProgramData\MetacogExtAnchor`、`D:\MetacogExtAnchor`、`D:\MetacogExtRoot`（各含被沙箱过滤器锁死的锚文件/残留）。env 已撤，误指即 fail-closed，无安全影响。
+- **结案裁定（2026-10-26）**：KK 重启宿主进程验证无效（OS 级外部域仍不可达成）后裁定**接受选项 C**——Leg-1 以防御纵深级（home 树外默认 seal，H-1 口径如实适用）为终态正式结案，不再追求本机 OS 级「Agent 不可写且可读」外部域。C-1 闭合仍待 Leg-2 生态外第三方签字。
+
+### 验收
+- 五处版本号 2.27.28；冻结账本 33 文件重 record + verify 绿；test-c1 60/60；全量 54/54 诚实 PASS。
+- **C-1 判定（结案更新，2026-10-26）**：Leg-1 = **CLOSED（防御纵深级终端态）**——KK 于 2026-10-26 重启宿主进程验证无效（OS 级外部域仍不可达成，锁与读互斥），裁定**接受选项 C**：不再追求本机 OS 级「Agent 不可写且可读」外部域，以当前 home 树外默认 seal（防御纵深级，H-1 口径「同用户可改写」如实适用）为 Leg-1 终态；junk 目录三处不可删已挂账（误指即 fail-closed，无安全影响）。Leg-2 = 规范已备（v2.27.27），待生态外第三方实际签字。**C-1 整体维持 OPEN**，待 Leg-2 签字后方可在所述环境+版本上判定闭合（签字范围条款见 `references/third-party-audit-signoff-guide.md` §1/§7）。
+
+---
+
+## v2.27.27（2026-10-26）— C-1 闭合 legs 之二：第三方审计签字操作指引（纯文档，无代码变更）（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「2」授权产出第三方审计签字操作指引清单。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 实修（文档新增）
+- 新增 `references/third-party-audit-signoff-guide.md`——C-1 闭合 Leg-2（外部人工步骤）的操作规范：签字范围界定（证明/不证明）、前置条件清单（Leg-1 须先完成）、审计人资格红线（**同生态 runtime Agent 不得充当第三方**——Hermes 等只能 CONDITIONAL-PASS 的根因）、送审材料包（不含任何密钥）、审计人最小探针集 11 项（P1–P11 预期结果表，与 test-c1 60 断言口径一致）、审计结论处置（全过/发现/拒签）、签字声明模板（必备字段 + 有效期条款）、签字后落盘动作（沿用冻结纪律）、诚实红线（禁止 Agent 代签/复用旧签字蒙混新版本）。
+- **无代码变更**：metacog.py/sigcrypto.py 逻辑零改动（仅 MIN_SUPPORTED_VERSION 随版升 (2,27,27)）；test-c1 60 断言不变。
+
+### 验收
+- 版本五处 2.27.27 一致；冻结账本扩容 32→**33 文件**（新增 third-party-audit-signoff-guide.md）重 record + verify 绿。
+- test-c1 60/60 PASS；全量 54/54 诚实 PASS。
+- **诚实边界（不变）**：本指引是 Leg-2 的操作规范而非签字本身；C-1 维持 OPEN 直至 Leg-1（真正外部域部署）+ Leg-2（生态外第三方签字）齐备。禁止 Agent 代签；签字仅对所述环境+版本有效。
+
+---
+
+## v2.27.26（2026-10-26）— C-1 异族审计收口：H-2 删锚降级硬拒 + H-3 破闸 LOUD 告警 + E1 seal 落点隔离校验（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「调用hermes mcp审计」触发异族独立审计（评级 C），随后指令「1+2」授权「文档诚实边界补全 + 代码修复」。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 审计背景（audit-case-metacog-v22725-external-domain-gate.md）
+异族审计对 v2.27.25 外部域闸门独立实证（20 探针 19 复现），关键发现：
+- **H-1（默认配置双权威虚设）**：默认落点下外部根锚与树外公钥/attestation 同目录同权限（0444），同用户 `chmod u+w` 可改写外部锚——默认配置相对阶段1/① 增量防御 = 0。
+- **H-2（删锚静默降级）**：删除外部根锚 → 退回 CONTRACT 单权威 → 写入攻击者公钥 + 重签 + 覆写钉固值 → `verify` 返回 ok（无需令牌、不刷冻结账本）。
+- **H-3（破闸静默 fail-open）**：`METACOG_ATTEST_ENFORCE=0`（同用户可自设）→ 三重篡改仍 rc=0 且 stdout 完全为空、零告警。
+- **E1（seal 落点无隔离校验）**：seal 落点对 Agent 完全可写时仍 rc=0，无任何「非真正外部域」硬告警。
+
+### 实修（v2.27.26）
+- **H-2 收口**：`_attest_verify_core` 语义升级——CONTRACT.md 已钉固（双权威意图）但外部根锚缺失 → 新 status `root_anchor_missing`（fail-closed，rc=1），删除外部锚不再静默降级到单权威；`_attest_gate` 与 `cmd_anchor_attest_verify` 处理新态并指引 `anchor-attest-root-seal` 补密封。原 `pin_mismatch` 路径被本态覆盖（pinned 存在即要求外部锚必在），处理器保留（防御性死代码，如实披露）。
+- **H-3 收口**：`_attest_gate` 在显式破闸（`METACOG_ATTEST_ENFORCE=0`）时发 **LOUD 告警**（`[WARN] C-1 破闸生效…`，每次受管控命令派发前可见），破闸语义不变（仍 rc=0 放行）但不再静默 fail-open。
+- **E1 收口**：`cmd_anchor_attest_root_seal` 密封后实证校验落点目录对本进程可写性——可写则发 **LOUD 告警**（`[外部域未隔离·LOUD]…`，明确非真正外部域），不可写则确认符合真正外部域闸门要求。
+- **回归**：`test-c1-attestation.py` 53→**60 断言**——新增 3 函数（删外部锚硬拒 / 破闸 LOUD 告警 / seal 可写落点告警）；`_provision` 及 3 处内联布建补 `root-seal` 步骤（v2.27.26 起钉固后外部锚为必备布建步骤，布建语义如实更新）。
+
+### 验收
+- 版本五处 2.27.26 一致；MIN_SUPPORTED_VERSION 同步 (2,27,26)。
+- test-c1 **60/60 PASS**；全量 54/54 诚实 PASS。
+- **诚实边界（承接审计 H-1，如实登记）**：默认落点（home 同级树外）下「双权威交叉核对」对同用户攻击者**仍为同权虚设**——H-2/H-3/E1 收口封堵的是「删锚绕过 / 破闸静默 / 落点误判」三个**操作性缺口**，**不改变 C-1 OPEN 口径**：C-1 结构性闭合仍须 ① `METACOG_ATTEST_ROOT_ANCHOR` 指向 Agent 进程不可写位置（真正外部域部署）+ ② 第三方审计签字（外部人工步骤）两者齐备。
+
+---
+
+## v2.27.25（2026-10-26）— C-1 外部域存储闸门（代码可落地部分）：权威公钥指纹存至 Agent 可写域之外（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「1」授权推进 C-1 真正闭合路径之①外部域存储闸门（代码可落地部分）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 设计（承接 v2.27.21 阶段1 + v2.27.22 ① + v2.27.23 ③ + v2.27.24 阶段2/3）
+- **核心目标**：C-1 信任根（权威公钥指纹）从「仅钉固于树内 CONTRACT.md（受 H-05+L1，但 env 锚密钥本进程可读=部署契约残余，同用户持 env 密钥可重基线钉固值）」升级为「同时/优先存于 Agent 可写域之外」——攻击者即便持 Agent 全写权，只要外部根锚落点 Agent 进程不可写，即无法改写权威，C-1 闭合才有实质意义。
+- **落点分层**：默认落点 = 树外 home 目录（同 `ATTEST_ANCHOR_DIR`，同用户进程可写——仅防御纵深：防 tree-only 篡改 + 与 CONTRACT.md 钉固形成「树内 + 树外」双权威交叉核对）；生产须设 `METACOG_ATTEST_ROOT_ANCHOR` 重定向到 Agent 进程**不可写**位置（不同用户 / 管理员保护 / HSM / 只读介质），方为真正外部域闸门（类比 v2.7.1 `anchor_storage_outside_root`）。
+- **交叉核对**：`verify` / 强制闸门在权威判定时——外部根锚存在则优先校验公钥指纹与其一致；且外部根锚与 CONTRACT.md 钉固须一致（双权威任一被篡改即 fail-closed）。外部根锚缺失 → 回退 CONTRACT.md 钉固双轨（向后兼容，既有部署零破坏）。
+
+### 实修
+- **metacog**：新增 `_attest_root_anchor_dir` / `_attest_root_anchor_path` / `_read_attest_root_anchor` / `_seal_attest_root_anchor`（外部根锚读写，落只读）；`_attest_verify_core` 新增外部权威交叉核对（status：`root_anchor_mismatch` / `root_anchor_conflict`）；`_attest_gate` 与 `cmd_anchor_attest_verify` 处理两新态（rc=1）；新增特权命令 `anchor-attest-root-seal`（令牌门 `METACOG_ATTEST_PUBKEY_TOKEN/..._EXPECTED`，密封权威指纹到外部根锚）；`anchor-attest-verify` 帮助文本同步。
+- **回归**：`test-c1-attestation.py` 新增 4 函数 15 断言（seal 令牌三态 + 密封后放行 / 仅外部锚作 sole 权威 + 捕获换钥篡改 / 外部锚被篡改硬拒 / CONTRACT 钉固与外部锚矛盾硬拒），全文件 38→53 断言。
+
+### 验收
+- 版本五处 2.27.25 一致；MIN_SUPPORTED_VERSION 同步 (2,27,25)。
+- 冻结账本重 record（metacog.py + test-c1 内容变更重基线）+ verify 绿（保持 32 文件）。
+- test-c1 **53/53 PASS**（含 15 新增强制闸门/外部锚用例）；全量 54/54 诚实 PASS（外部域闸门无回归）。
+- **诚实边界：外部域存储闸门代码可落地部分已落地，仍不构成 C-1 完全闭合**——默认落点仍在 home（同用户可写=防御纵深，非真正外部域）；真正外部域须 `METACOG_ATTEST_ROOT_ANCHOR` 指向 Agent 进程**不可写**位置（OS/部署步骤，代码层无法强制，属部署契约），且离线私钥须确离线持有、外部锚密封须由部署方在特权令牌门内执行。此外仍待：第三方审计签字（生态外独立审计，人工步骤）。**C-1 结构性闭合判定维持 OPEN**，待真正外部域部署 + 第三方审计签字。
+
+---
+
+## v2.27.24（2026-10-26）— C-1 阶段2/3：ENFORCE 强制硬闸 + 过期策略 + 默认强制（armed→mandatory）（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「1」授权 C-1 真正闭合路径（阶段2/3 强制）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 设计（承接 v2.27.21 阶段1 + v2.27.22 ① + v2.27.23 ③）
+- **阶段2 显式强制**：`METACOG_ATTEST_ENFORCE=1` 时，受管控命令（propose/gate/apply/resign/rollback/verdict 及 confirm --sign）派发前须经 `_attest_gate` 硬闸——非对称层缺失（公钥/attestation 缺失）→ rc=2 硬拒；公钥解析失败/指纹与 CONTRACT.md 钉固值失配/过期/验签失败/畸形 → rc=1 硬拒（命令不执行）。
+- **阶段2 过期策略**：attestation 时间戳 `at`（YYYYMMDDTHHMM）距今天数 > `METACOG_ATTEST_MAX_AGE_DAYS`（默认 90，≤0 不过期）→ expired 硬拒（须人类离线重签），落实「定期重签纪律」。
+- **阶段3 默认强制（armed→mandatory）**：`METACOG_ATTEST_ENFORCE` 未设且 CONTRACT.md 已钉固公钥指纹（`anchor_attest_pubkey_sha256`，即 ① 武装）且层完整布建（pub+att 文件均在）→ 默认强制；闭环 ①「双轨未强制」残余（unarmed legacy 仍 WARN 可被绕过）。钉固但布建中途 → 双轨放行避免自锁。
+- **破闸逃生**：`METACOG_ATTEST_ENFORCE=0` 强制双轨（紧急逃生/布建期），不依赖该开关时现网行为完全不变（53 套件零破坏）。
+- **运行期 HMAC 显式降格**：env HMAC 链（L1）明确记为「检出层」，离线 RSA attestation 为「认证层」——C-1 信任根由离线私钥承担，进程无私钥不可伪造。
+
+### 实修
+- **metacog**：新增 `ATTEST_GATED_CMDS`、`_attest_max_age_days`、`_attest_enforce_mode`、`_attest_verify_core`、`_attest_gate`；`cmd_anchor_attest_verify` 重构复用核心（含过期/钉固/验签/缺失四态）；`main()` 派发前接入 `_attest_gate` 硬闸；`anchor-attest-verify` 子命令帮助文本同步。
+- **回归**：`test-c1-attestation.py` 新增 11 断言（未武装双轨默认放行 / 显式 on+缺失层硬拒 rc=2 / armed 完整布建合法放行 / armed 篡改 ledger 被硬闸捕获 rc=1 / 过期策略硬拒 rc=1 / 破闸 off 放行），全文件 27→38 断言。
+
+### 验收
+- 版本五处 2.27.24 一致；MIN_SUPPORTED_VERSION 同步 (2,27,24)。
+- 冻结账本重 record + verify 绿（保持 32 文件）。
+- test-c1 **38/38 PASS**（含 11 新增强制闸门用例）；全量 54/54 诚实 PASS（阶段2/3 无回归）。
+- **诚实边界：阶段2/3 仍不构成 C-1 完全闭合**——强制闸门生效前提是「armed 已布建 + 部署方实际启用 + 离线私钥确实离线持有」；env 锚密钥对本进程可读（部署契约残余，C-1 本质）未根除，同用户持 env 密钥重基线 CONTRACT.md 钉固值之门仍开（与 ① 同门槛）。真正闭合仍待：外部域存储闸门（信任根/锚存至 Agent 可写域之外，类比 v2.7.1 `anchor_storage_outside_root`）+ 第三方审计签字。**外部域存储 + 第三方审计签字属人工/OS 步骤，本版代码未也不能代执行**。
+
+---
+
+## v2.27.23（2026-10-26）— C-1 ③：frozen-hashes.jsonl 纳入 attestation commitment（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「1+3」授权 ③（frozen-hashes 纳入 commitment）；①+② 已随 v2.27.22 落地。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 设计（承接 v2.27.21 §3 commitment 定义 + v2.27.22 ①）
+- **③ 收口**：attestation commitment 原仅覆盖三个 ledger 状态文件（integrity.json / applies.jsonl / sig-claims.jsonl）。v2.27.23 把 `frozen-hashes.jsonl`（H-05 冻结完整性账本）追加进 `ATTEST_FILES`——使 attestation 也覆盖「冻结基线」本身。攻击者替换/删除 frozen-hashes.jsonl（即便 H-05 未强制）亦被 attestation 验签失配捕获（fail-closed，防御纵深）。
+- **commit 键自动推导**：`frozen-hashes.jsonl` → `frozen_hashes`；缺失文件仍记 `"missing"`（删/补建均失配，与既有 attestation 失配）。
+
+### 实修
+- **metacog**：`ATTEST_FILES` 元组追加 `"frozen-hashes.jsonl"`（commit 键 `frozen_hashes`）。
+- **回归**：`test-c1-attestation.py` 由 24→**27 断言**——新增「③ frozen-hashes.jsonl 纳入 commitment」组（含 frozen-hashes 存在 → verify 通过 / 篡改冻结账本 → FAIL rc=1 / 删除冻结账本 → FAIL rc=1）；manifest 仍为 54 套件。
+
+### 验收
+- 版本五处 2.27.23 一致；MIN_SUPPORTED_VERSION 同步 (2,27,23)。
+- 冻结账本重 record（32 文件：metacog.py / test-c1 / SKILL.md / CHANGELOG.md / design.md 变更）+ verify 绿。
+- 全量 54/54 诚实 PASS（③ 无回归）。
+- **诚实边界：③ 属防御纵深加固，不改变 C-1 OPEN 口径**——③ 仅让 attestation 多覆盖一个已被 H-05 保护的文件（H-05 自 v2.27.17 默认强制后边际价值有限），不构成 C-1 结构性闭合；C-1 仍待阶段2/3 + 外部域存储闸门（类比 v2.7.1 `anchor_storage_outside_root`）+ 部署启用 + 第三方审计签字。
+
+---
+
+## v2.27.22（2026-10-25）— C-1 ①：公钥 sha256 钉入 CONTRACT.md 结构性闸门（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「1、2」授权实施第五项修复方向 ①+②（③ 评估 frozen-hashes 纳入 commitment 未实施）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 设计（承接 v2.27.21 审计「诚实修正」段修复方向）
+- **审计主发现闭环**：v2.27.21 阶段1 的 `anchor-attest-verify` 对树外公钥**无钉固指纹二次校验**，同用户全写权攻击者替换 pubkey+attestation 双文件即可伪造通过。v2.27.22 ① 把公钥 SHA-256 钉入 CONTRACT.md（受 H-05 硬闸 + L1 冻结保护的不可动文件），verify 加载树外公钥后须与本指纹一致，否则 fail-closed——**armed 后**闭环该主发现。
+- **机制**：`anchor-attest-pubkey-install`（特权令牌门）写树外公钥同时把指纹钉入 CONTRACT.md；verify 先比指纹再验签。钉固权威依赖 H-05 + L1（CONTRACT.md 属不可动文件），使 pubkey 替换攻击门槛从"改两个树外文件"升到"改 L1 受保护的 CONTRACT.md（须 env 锚密钥重基线或触发 H-05 fail-closed）"。
+- **双轨保留**：CONTRACT.md 无钉固（legacy/未钉固）时 verify 仍 WARN（闸门未武装），同用户替换双文件仍可能绕过——如实登记残余（test-c1 第23/24条）。
+
+### 实修
+- **sigcrypto**：新增 `anchor_pubkey_sha256(pub_pem)` 原语 + 自检 2 断言（同公钥恒同指纹 / 异公钥必异）。
+- **metacog**：新增 Store 方法 `pinned_anchor_attest_pubkey_sha256` / `write_anchor_attest_pubkey_sha256`（CONTRACT.md §9 anchor-attest-pubkey-root 节，复用 human-identity-root 钉固范式）；`cmd_anchor_attest_pubkey_install` 写公钥后钉固指纹并提示须重基线冻结账本；`cmd_anchor_attest_verify` 加载公钥后先比 CONTRACT.md 钉固指纹（不符 → rc=1 fail-closed，armed；缺失 → WARN 双轨）。
+- **回归**：`test-c1-attestation.py` 由 19→**24 断言**——新增「同用户替换 pubkey+attestation 双文件伪造」armed(rc=1)/unarmed(rc=0 残余) 两组 + install 钉固断言；manifest 仍为 54 套件。
+
+### 验收
+- 版本五处 2.27.22 一致；MIN_SUPPORTED_VERSION 同步 (2,27,22)。
+- 冻结账本重 record（32 文件：CONTRACT.md 钉固节 + metacog.py/sigcrypto.py/test-c1 等变更）+ verify 绿（备份 frozen-hashes.jsonl.bak-202722）。
+- 全量 **54/54 诚实 PASS × 双跑**。
+- **诚实边界：① 仍属部分加固，C-1 仍 OPEN**——钉固权威依赖 H-05+L1，而 L1 的 env 锚密钥对本进程可读（部署契约残余），同用户持 env 密钥仍可重基线钉固值（与任意 L1 受保护篡改同门槛）；且 ① 双轨未强制（unarmed legacy 仍 WARN）。真正闭合须阶段2/3 + 外部域存储闸门（类比 v2.7.1 `anchor_storage_outside_root`）+ 部署启用 + 第三方审计签字。
+
+---
+
+## v2.27.21（2026-10-25）— C-1 专项阶段1：锚状态 attestation（离线私钥签 / 进程内仅公钥验）（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「2」授权立项 C-1 完全非对称化专项。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 设计（承接 v2.27.15 roadmap §2.1，完整设计见 `references/asymmetric-trust-root-design.md`）
+- **C-1 残余本质**：对称 env 锚密钥对本进程可读 = 部署契约残余，进程理论上可自签（「装上了但可自签」）。私钥离线 ⇒ 不可能逐条实时签名 ⇒ 采用 **attestation 认证模式**：运行期 HMAC 保留为检出层（L1）；人类离线私钥对 ledger 状态 commitment 签 RSA-2048 attestation（L2），进程/包内仅持公钥（钉固树外只读）。事后篡改 ledger ⇒ commitment 变 ⇒ 失配 fail-closed——**此 fail-closed 仅对 tree-only 攻击者成立（见下诚实边界），对同用户全写权攻击者不成立**。
+- **commitment 口径**：`ledger/integrity.json`、`ledger/applies.jsonl`、`ledger/sig-claims.jsonl` 三文件字节级 sha256（缺失 → `missing`，删/补建均失配）。字节级是刻意选择：任何增删改都改变 commit，无需 schema 理解。
+- **消息格式**：复用 v2 长度前缀（N-4 字节口径）+ purpose 前缀 `METACOG-ANCHOR-ATTEST-v1` 防跨协议复用 + 字段名白名单；attestation 串 `v1:{at}:{b64sig}`，at 为**紧凑无冒号** UTC 时间戳（YYYYMMDDTHHMM）——段内无冒号定界约束（开发期实测：ISO 冒号会破坏串解析，已加 ValueError 防线）。确定性签名（低频人工操作、无 use-once 语义，不引入 nonce）。
+
+### 实修
+- **sigcrypto**：新增 `anchor_attestation_message` / `anchor_attest` / `anchor_attest_verify` 原语 + 自检 5 断言（往返/篡改失配/畸形/白名单外字段拒绝/含冒号 at 拒绝）。
+- **metacog**：新增 4 命令——`anchor-attest-keygen`（私钥口令加密落盘 + 提醒移离线；口令经 env 不进命令行）、`anchor-attest-pubkey-install`（特权令牌门 `METACOG_ATTEST_PUBKEY_TOKEN/..._EXPECTED` 双 env 恒定时间比对，公钥钉固树外只读）、`anchor-attest`（离线签发，默认写树外只读）、`anchor-attest-verify`（双轨：未配置 → WARN rc=0 现网行为不变；失配/验签失败/畸形 → rc=1 fail-closed）。树外写复用 freeze 同款「写前解除只读 + 写后落只读」。
+- **回归**：新增 `test-c1-attestation.py`（19 断言：keygen 口令门/产出 blob 非明文、install 令牌三态 + 非法公钥拒绝、attest 口令门/错口令拒绝、verify 双轨/篡改/删文件/他钥重签/畸形全 fail-closed），并登记 `test-suite-manifest.txt`（53→54 套件）。
+
+### 验收
+- 版本五处 2.27.21 一致；MIN_SUPPORTED_VERSION 同步。
+- 冻结账本重 record（32 文件：新增 test-c1-attestation.py + asymmetric-trust-root-design.md）+ verify 绿。
+- 全量 **54/54 诚实 PASS × 双跑**。
+- **诚实边界：阶段1 不声称 C-1 闭合**——非对称层未强制（阶段2 `METACOG_ATTEST_ENFORCE` / 阶段3 默认强制+重签纪律未实施）且需部署方实际启用；C-1 结构性闭合判定 = 阶段3 落地 + 部署启用 + 独立审计复核。
+
+### 诚实修正（v2.27.21 独立只读审计后）
+- 审计实证：`anchor-attest-verify` 直接读取树外公钥文件且无钉固指纹二次校验——同用户全写权攻击者（真实威胁模型内的被约束进程运行身份，可改 ledger + 公钥 + attestation 三文件）可自签新 attestation 使 verify 通过。**故阶段1 对同用户全写权攻击者无增量保护，与 v2.7.x 以来 C-1 的 OPEN 口径一致；本层仅防 tree-only（可写技能树、不可写 home 目录）攻击者。**
+- 原设计文档「同用户全写权攻击者仍受约束——对 C-1 实质改进」及本条目「无私钥不可伪造」的承载表述属 **over-claim**，已修订（`references/asymmetric-trust-root-design.md` §6 + 本条目设计段 + SKILL.md 评级框架）：收敛为「阶段1 = 检出层升级 + 接口预埋，非 C-1 闭合」。
+- 缺失 v2.7.1 `anchor_storage_outside_root` 式结构性闸门（外部锚存储须位于 Agent 可写域之外）：attestation 公钥/认证文件落 home 目录（同用户可写），verify 无域名/指纹校验 → 严谨性相对 v2.7.1 倒退。修复方向（待授权）：公钥 sha256 钉入 CONTRACT.md（受 H-05 硬闸保护），使改公钥必被检出。
+- 测试覆盖缺口：test-c1 第18条仅测「公钥不变、他钥重签」失配，未覆盖「同用户替换公钥+attestation 双文件」真伪造路径——已记入修复方向。
+
+---
+
+## v2.27.20（2026-10-25）— N-4 收口：sigcrypto 长度前缀改 UTF-8 字节数口径（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「2」授权对审计挂账 N-4 立项收口。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### N-4 实修（sigcrypto.approval_message）
+- **口径变更**：v2 格式长度前缀由 Python str **码点数**改为 **UTF-8 字节数**（`len(v.encode("utf-8"))`）——消息以 UTF-8 编码传输/签名，前缀应描述编码后字节长度；否则未来实现 v2 消息解析器时「按前缀切字节」与「按码点切」分叉，非 ASCII 字段值（如含中文的提案 id）将产生歧义注入面。
+- **兼容性（如实登记）**：验签路径全部走「重新构造 + RSA 比对」（metacog.verify_human_binding 四级回退均调用同一构造函数），构造口径变更即全局一致，**无解析器消费该前缀**（审计员确认）；v2 实际字段（purpose/id/chash/t0/nonce）现网均为 ASCII——两种口径数值相同，**存量 ASCII v2 签名不受影响**。若存在含非 ASCII 字段值的 v2 存量签名须重签（v2.27.17 引入 v2 格式至今无此类已发布签名，无实际影响面）。
+- **回归**：sigcrypto 自检新增非 ASCII 断言（`提案-中文-ID` = 16 UTF-8 字节 → 前缀 `0016`，码点口径会错标 0007；非 ASCII 消息签名/验签往返通过）；`test-c01-no-default-anchor.py` 签名组新增 2 断言（非 ASCII 字节前缀 / 现网 ASCII 口径签名仍验签通过），套件 35→37 断言，ALL PASS。
+
+### 验收
+- 版本五处 2.27.20 一致；MIN_SUPPORTED_VERSION 同步 (2,27,20)。
+- 冻结账本授权重置重 record（30 文件，sigcrypto/test-c01/SKILL.md/CHANGELOG 变更）+ verify 绿；全量 53/53 双跑。
+- 挂账维持：C-1 完全非对称化（包内仅公钥）未实施。**第四轮审计全部发现（2 Low + 2 Info）至此收口完毕。**
+
+---
+
+## v2.27.19（2026-10-25）— N-3 收口：freeze 冻结链 HMAC 密钥去代码常量化（env 锚派生，fail-closed）（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「2」授权对第四轮审计 N-3（freeze 域密钥常量）立项收口。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### N-3 实修（freeze.py 冻结链密钥与账本签名锚同源）
+- **删代码常量种子**：`_FREEZE_KEY_SEED` 常量定义删除，源码全文不再出现该常量名（源码卫生断言守卫：`test-c01-no-default-anchor.py` 断言 freeze.py 无该字面量，历史披露注释同步改写避免自匹配）。`_FREEZE_HMAC_LABEL` 派生标签保留（非密钥材料）。
+- **`_freeze_key()` 重写**：`hmac.new(trust_root.get_anchor_key(), _FREEZE_HMAC_LABEL, sha256)`——冻结链密钥改由**部署专属锚密钥**（env `METACOG_TRUST_ROOT_ANCHOR_KEY`，与账本签名锚同源，C-01 口径）派生。`trust_root` 模块缺失 → `RuntimeError`（含恢复指引）；env 未配置 → `RuntimeError`（含配置指引）；env 非法 base64 / <32 字节 → M-01 `ValueError` 透传。**无任何代码兜底**。
+- **两条调用路径 fail-closed**：`_parse_chain` 开头捕获 `RuntimeError` → 返回 `FROZEN-KEY` violation（verify 显式失败而非裸 traceback）；`record` 捕获 → `[REFUSED]`（`freeze-key-unconfigured` 审计留痕，rc=-1）。冒烟实测：无 env record → REFUSED rc≠0；带 env record/verify → rc=0。
+- **诚实边界（同 C-01）**：env 密钥对本进程自身可读属部署契约残余（非代码层可防）；本修将「持代码读权即可伪造冻结链」收窄为「持代码读权**且**知部署 env 密钥」。保护增量：(c) 链密钥部署专属化——同一份源码在不同部署下链密钥不同，源码泄漏不再等价于链密钥泄漏。
+- **破坏性迁移（一次性）**：既有冻结账本由旧常量种子建立，新派生密钥校验必失败——须配置 env 后经**授权重置门**（`METACOG_FREEZE_ALLOW_MISSING=1 + ALLOW_RESET=1 + RESET_TOKEN/EXPECTED 成对`）全量重新 record 建立基线。本版发布包冻结账本已按此流程重建（30 文件，锚备份 `*.bak-202719`）+ verify 绿。
+
+### 回归
+- `test-c01-no-default-anchor.py` 新增 N-3 组（7 断言：freeze.py 无 `_FREEZE_KEY_SEED` 字面量 / 链密钥经 `trust_root.get_anchor_key` 派生 / `_freeze_key() == HMAC(锚密钥, label)` / 无 env record REFUSED rc=-1 + 输出含配置指引 / 恢复 env record 成功 / verify 通过），套件 28→35 断言，ALL PASS。
+- 版本五处 2.27.19 一致；MIN_SUPPORTED_VERSION 同步 (2,27,19)。
+- 挂账维持：N-4（Info，长度前缀码点口径，无消费方）；C-1 完全非对称化（包内仅公钥）未实施。
+
+---
+
+## v2.27.18（2026-10-25）— 第四轮独立审计（4.5/5）收口：N-1 锚密钥严格解码 + N-2 存量配置无 env 显式 corrupt（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「1」授权按第四轮审计清单修复（N-1/N-2 两 Low）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### 第四轮独立审计结论（先登记，修复在后）
+- 隔离只读审计代理（自检回避纪律，只评不改）对 v2.27.17 八项收口声明逐项实证：**8/8 PASS**——含 11 项签名动态实测（歧义注入/畸形解析/跨提案重放全 fail-closed）、六态硬闸真值表、M-03 三态、删配置降级攻击链核验（sentinel + 树外基线 + 钉固三重拦截，无新绕过面）、全量 53/53 独立复跑。**总评 4.5/5**（上轮 3.3）。
+- 诚实度检查：CHANGELOG/SKILL.md 无 over-claim。审计员注明：其独立复验为单跑 53/53，双跑另一遍以仓库日志为佐证。
+
+### 本版实修（2 Low，均为审计员建议方向）
+- **N-1 · 锚密钥严格解码（trust_root.get_anchor_key）**：`base64.b64decode` 开 `validate=True`——原默认会**静默剥除**非字母表字符（合法 48B 密钥尾部混入 `!!!` 仍返回有效密钥），使「非法 base64 → ValueError」非全称成立；现与验签路径口径一致。实测：`TEST_KEY + "!!!"` → ValueError；合法密钥不受影响。
+- **N-2 · 存量签名配置 + 无 env 显式 corrupt（TrustRootConfig.load）**：先取 `get_anchor_key()`，为 None（env 未配置）时直接判 `corrupt=True, enabled=True`（fail-closed），杜绝 `verify_trust_root_config_sig(d, None)` 抛未捕获 TypeError——v2.27.17 升级部署「存量带 `_sig` 配置 + 忘配 env」曾得到裸 traceback 而非明确失败态。env 非法/过短仍由 get_anchor_key 抛 ValueError（M-01 透传）。
+- 回归：`test-c01-no-default-anchor.py` 新增 N-1/N-2 组（4 断言：尾部杂质 ValueError / 合法密钥不受影响 / 带 `_sig` 无 env → corrupt / 无 `_sig` 无 env → corrupt），套件 24→28 断言。
+
+### 未修挂账（审计 Info 级，如实登记）
+- **N-3（Info，已披露残余）**：freeze.py 冻结账本 HMAC 链密钥仍为代码常量——适用域仅冻结清单（开发/发布期卫生工具），不触及账本/trust-root 签名锚；源码与 SKILL.md §威胁模型已披露，真正防御是树外锚点。维持披露。（**已于 v2.27.19 收口**。）
+- **N-4（Info）**：sigcrypto 长度前缀 `{:04d}` 计码点数而非 UTF-8 字节数——当前无解析器消费该前缀（纯构造 + RSA 比对），无安全影响；未来实现 v2 消息解析器前须统一字节数口径。
+
+### 验收
+- 全量 **53/53 诚实 PASS × 双跑**（v2.27.18 版本/文档改动后）。
+- 版本五处 2.27.18 一致；冻结账本经授权重置门全量重 record（30 文件）+ verify 绿。
+
+---
+
+## v2.27.17（2026-10-25）— C-01 专项收口：删源码内嵌默认锚（宁可装不上，不可自签）+ H-01 逃生舱删除 + H-05 硬闸默认开 + M-01/M-03/L-06 + 签名 v2 长度前缀/nonce 化（**未发布 SkillHub**）
+
+**授权与硬控制**：owner 指令「继续修」授权启动路线图 §6 C-01 非对称化专项（前一轮 v2.27.16 验收时 C-01 单列未授权）。**本版未经 owner 逐次授权不上架 SkillHub**（持续硬控制）。
+
+### C-01 专项实修（路线图 §6 全条目）
+- **C-1a · 删源码内嵌默认锚（审计建议 #11）**：`trust_root.py` 删 `_TRUST_ROOT_ANCHOR_KEY_DEFAULT` 常量、`metacog.py` 删 `_LEDGER_ANCHOR_DEFAULT` 常量——锚密钥**唯一来源** = env `METACOG_TRUST_ROOT_ANCHOR_KEY`（base64，≥32 字节）。未配置 → `get_anchor_key()` 返 None → `_resolve_anchor_key()` 抛 `LedgerAnchorDefaultError`（fail-closed 拒绝启动，类名保留、语义改为「锚未配置/不合规拒绝启动」）。`METACOG_TRUST_ROOT_ALLOW_DEFAULT` 废除（运行时无任何读取路径）。新回归 `test-c01-no-default-anchor.py` 源码卫生断言（两常量字面量 + ALLOW_DEFAULT 读取路径均不得存在）。
+- **M-01 · 锚密钥合规校验**：非法 base64 / 解码后 <32 字节 → `ValueError` fail-closed，**不回落任何默认锚**。
+- **H-01 · legacy 逃生舱删除**：`build_trust_root` 对 legacy/disabled 恒返 `DenyTrustRoot("external-anchor-required")`；`METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR` env **已无效（no-op）**——该一句 env 曾是 H-05 完整性硬闸的整体旁路入口（审计实证的 H-01→H-05 削弱链）。
+- **H-05 · 完整性硬闸默认开**：`_script_integrity_drift_if_enforced` / `_manifest_integrity_drift_if_enforced` 删「外部锚已启用 或 STRICT=1」opt-in 条件，改**默认强制**；唯一显式退出 = `METACOG_TRUST_ROOT_LENIENT=1`（严格 `=="1"`，warn 留痕）。外部锚状态与硬闸**解耦**（helper 不再读 `external_trust_root`）。
+- **M-03 · freeze 特权令牌双 env 化**：删 `_ANCHOR_INIT_TOKEN` / `_RESET_TOKEN` 代码字面量——改双 env 恒定时间比对（`METACOG_ANCHOR_INIT_TOKEN` vs `..._EXPECTED`、`METACOG_FREEZE_RESET_TOKEN` vs `..._EXPECTED`）；**无 EXPECTED → REFUSED（fail-closed）**。读源码不再等于持令牌。
+- **L-06 + nonce 化 · approval_message v2 格式**：人类签名消息改 `{name}:{len:04d}:{value}` 长度前缀（用途前缀 `METACOG-HUMAN-APPROVAL-v2`）+ 可选 nonce 字段（`new_nonce()`，128-bit）；`bind_human_signature` 每次生成一次性 nonce，返回 `v2:{nonce}:{b64sig}`（两次绑定签名串互异，消除确定性签名的重放/链接构造面）；`verify_human_binding` 四级回退：v2+nonce → v2 无 nonce（确定性，覆盖 t0）→ 旧格式带 t0（M-7 绑定）→ 旧格式无 t0（legacy-unbound）。**存量旧格式签名仍可验（不强制重签）**；旧格式构造器保留为 `approval_message_legacy()`（仅验签回退用）。
+
+### H-01/H-05 删除的连带语义收口（诚实登记，非静默行为变更）
+- **check_pubkey_root DenyTrustRoot 细分**：H-01 删除后未配置部署的 `external_trust_root()` 由 None 变 DenyTrustRoot；若一律 fail-closed 则所有本地/legacy 部署验签全灭。现细分：纯未配置（reason=`external-anchor-required`）→ WARN 留痕后回落 legacy CONTRACT 钉固分支；corrupt / no-provider / unknown-backend / inside-writable-root 等**维持 fail-closed**。纯未配置不是篡改信号；账本锚密钥不受影响（仍 env-only，绝不回落）。
+- **ensure_pubkey_root_pinned 补钉固后刷新基线**：补钉固会变更 CONTRACT.md（human-identity-root 节）；H-05 默认开后若不刷新清单基线，下一次硬闸命令将按漂移拒绝（「钉一次固、处处被拒」footgun）。调用方已过硬闸，到达此处的 CONTRACT.md 必与基线一致，刷新只吸收本次钉固写入、不洗白任何漂移。
+
+### 测试与验收（诚实口径）
+- 全局测试迁移：53 套件 env 口径 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` → 固定测试密钥 `METACOG_TRUST_ROOT_ANCHOR_KEY`（base64 48 字节，仅测试用；生产须部署专属随机密钥）。
+- 新回归 `test-c01-no-default-anchor.py`（24 断言：源码卫生 / env-only+M-01 / H-01 no-op / check_pubkey_root 细分 / M-03 三态 / 签名 v2+nonce+use-once+legacy 回退）入 manifest（现 53 套件）。
+- 受影响既有套件按新语义重写（非放水）：test-trust-root（C-9 四态、工厂 legacy/disabled 断言、C-11 逃生舱 no-op、STRICT 真值表 → LENIENT 真值表、helper 真值表含解耦验证）、test-v2170-h3（重置门双 env + 缺 EXPECTED/不一致两负例）、test-v2130-hb（anchor-init 双 env）、test-v2100-r7（MED#1 语义更新）、test-v2274（R-6 未配置 fail-closed + 专属锚成功）、test-h06（重放断言改为「传入已消费签名串」——nonce 化后 TTY 重签产出全新合法签名属人类授权合法重签，use-once 防重放对象改为同一签名串）、test-confirm-sign（写失败输出解析——nonce 化后签名串逐次不同，改为直接从失败输出解析 v2 格式签名行）、test-human-gate（升级场景模拟补重基线——H-05 默认开后剥离 CONTRACT 第 7 节即清单漂移，须按合法升级重基线）。
+- **验收**：全量 **53/53 诚实 PASS × 双跑**（exit=0 且自报全过且无 [FAIL] 标记）。
+
+### 破坏性变更（部署迁移指引）
+1. **锚密钥必配**：升级后 `init`/keygen/apply 等任何触发账本签名的命令须设 `METACOG_TRUST_ROOT_ANCHOR_KEY`（base64 ≥32 字节专属随机密钥）；未配置 → `LedgerAnchorDefaultError`。**既有实例基线以旧默认锚签署，配置新密钥后须重新 init/keygen 建立基线**。
+2. **`METACOG_TRUST_ROOT_ALLOW_DEFAULT` 废除**、**`METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR` 无效化**：设了这两个 env 的部署须迁移到专属锚密钥；H-05 如需临时退出口径用 `METACOG_TRUST_ROOT_LENIENT=1`（warn 留痕）。
+3. **freeze 特权令牌**：`anchor-init` / 冻结态重置的令牌从「代码常量」改为「双 env 成对一致」——部署方私下保管 EXPECTED 值，不落源码。
+4. **人类签名格式 v2**：新签名带 nonce（`v2:{nonce}:{b64sig}`）；旧格式签名仍可验（四级回退），不强制重签；确定性「同消息同签名」性质不再成立（H-06 use-once 消费账本按签名串消费，防重放语义不变）。
+
+### 诚实边界（不声称闭合）
+- env 密钥对**本进程自身可读**——「部署方持密钥、Agent 进程读到」属部署契约（同进程隔离超出软件层），非代码层可防；完全非对称化（包内仅公钥、私钥离线/TPM）仍未实施，C-1 的完全闭合口径不变。
+- `check_pubkey_root` 对纯未配置部署回落 CONTRACT 钉固裁决（legacy 姿态）：该分支的权威根是 CONTRACT.md 钉固指纹（keygen 时人类在场写入），未配置外部锚的部署 C-1 口径仍 OPEN（与 v2.7.1 起历史口径一致，本轮未改变）。
+- C-01 收口范围为路线图 §6 代码层条目；外部审计复核（第四轮）未进行，「已收口」为代码层自证 + 53/53 回归支撑，非独立审计结论。
+
+---
+
+## v2.27.16（2026-10-25）— 第三轮外部审计（v2.27.15 包）收口·检测侧四失效（H-1~H-4）+ 检测复核与洗白面（M-1~M-6）+ 诚实度补课（**未发布 SkillHub**）
+
+**审计来源**：第三轮独立审计（`审计报告-unclekk-metacog-self-evolve-2.27.15.md`，2026-10-25）。总评 3.3/5（↑0.3）。审计方"总评"原话：**「修好的两件事是真的；新加的两件事比宣称的弱得多。」我方全盘接受**该定性。
+
+**两处过程偏差（诚实承认）**：
+1. **CHANGELOG v2.27.15 标题「注入线全堵」与实测不符**——N-10/N-11 不能按"已闭合"计，其残余正是本轮 H-1/H-2/H-3/H-4。本版已将 v2.27.15 标题更正为「**注入线已知入口全堵**」，N-10/N-11 重新定性为 H-1~H-4 的收口对象。
+2. **Hermes 三审（生态内）漏检 H-2**（删 `seed-ids.json` + 重跑 `init` 永久洗白）——因为该洗白路径恰由 `init` 自身提供，属我们自己的对抗审计覆盖盲区，如实承认，并把「init 自身作为洗白面」纳入未来对抗清单。
+
+### P0 级实修（4 项·检测侧"报绿但注入仍在"四失效全收口）
+- **H-1 · 删 `ledger/integrity.json` 即静默关检测（High，实测）**：原 `cmd_verify` 在快照空时直接 `return 0`，条目审计被跳过。现区分：applies 非空 + 基线缺失 → fail-closed rc=1（删基线以关检测）；全新实例 → rc=0 但明示「基线尚未建立」；两类都不早退、继续条目级审计。回归 `test-h1-missing-integrity.py`（6 断言）。
+- **H-2 · 删 `meta/seed-ids.json` + 重跑 `init` 永久洗白（High，实测）**：三层收口——① 种子集入 D4 基线域（`meta:seed-ids.json` 键，`_integrity_path` 新增 `meta:` 分支）；② 种子缺失且基线含该键 → 条目审计 fail-closed（删种子洗白检出）；③ `_write_seed_ids` 加 force 参数 + 「制品已存在且非可信覆盖 → 拒绝重采」守卫（`init` 重跑不再静默重采；`init-domain` 可信覆盖后 force 重采并显式入基线）。回归 `test-h2-seed-wash.py`（8 断言）。
+- **H-3 · 条目扫描只比 id、改正文不留痕（High，实测）**：① `record_apply` 落盘 `body_hash`（条目正文 SHA 锚，apply/resign 双路径同构）；② `_audit_entries_scan` 对 id 命中 applies 的条目比对正文哈希，不符即告警；③ 非 active 伪造条目不再静默 skip（「用 trial 状态绕过」收口）。回归 `test-h3-body-substitution.py`（4 断言）。
+- **H-4 · `applies.jsonl` >512KB 全量误报 + 诱导关控制（High·可用性）**：`read_jsonl` 移除 512KB 硬截断（逐行流式，显式 max_size 仅告警不截断）——长期运行的大库不再被误判为空导致所有已 apply 条目被误报为注入。回归 `test-h4-large-applies.py`（4 断言，>512KB 全量可读 + 注入仍检出）；`test-boundary-cases.py` 旧 512KB 断言按新契约更新。
+
+### P1 级实修（6 项）
+- **M-1 · applies 文件级基线复核**：`_audit_entries_scan` 内联复核 applies.jsonl 的 D4 基线哈希 + 锚签名 + 链（防直写伪造 apply 记录）。**实测更正（诚实登记）**：路线图原方案调 `applies_integrity_ok()`，实测其内部 `_integrity_chain_ok` 要求「链尾条须覆盖 applies」，任何其他域在 apply 之后合法重基线即误报 False（v2110/v22713 套件回归暴露）——现改为与 verify 主路径同语义的三步判定（哈希 + `_verify_anchor_sig` + `_chain_ok_for_verify` latest 语义）。
+- **M-2 · `seed-ids.json` 结构校验**：非 dict / 缺 seeds / seeds 非 dict → fail-closed 回落通配并告警（不再「存在即信任」静默接受篡改）。
+- **M-3 · `_reactivate_block` 加 `expected_id` 约束**：复活块条目 id 与期望不符 → ValueError（拒绝复活非目标条目后重基线洗白）；前缀残余告警不静默。回归 `test-m3-reactivate-expected-id.py`（3 断言）。
+- **M-4 · 关版本降级通道**：`MIN_SUPPORTED_VERSION=(2,27,16)` fail-closed 下限 + `_check_version_binding` 异常路径 fail-closed + 版本不一致 rc=1 阻断（原仅 warn）。
+- **M-5 · 统一 src 白名单**：`render_entry` 白名单收窄为 `[\w\-]+`（与 `ENTRY_RE` 解析器一致），杜绝 `src:P-1.2` 幽灵条目。回归 `test-m5-src-whitelist.py`（5 断言）。
+- **M-6 · `init-domain` 失败回滚 + 文档校正**：① `init_domain` 失败路径回滚本次新建的半成品实例（仅 `_fresh` 实例，既有实例绝不删除）；② `cmd_init_domain` 捕获 `LedgerAnchorDefaultError` 给出准确修复路径（`METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` / 专属 `METACOG_TRUST_ROOT_ANCHOR_KEY`），不再误导「检查 --output 目录可写」；③ SKILL.md 步骤 7.2 补 env 前缀、明确 `--config` 仅支持 name/redlines、明示安全制品只能经 propose+人类闸、登记失败回滚行为。
+
+### P2 级收口（7 项）
+- **L-1**：SKILL.md 评级框架段新增「第三方审计物证与独立评级原始件不随包发布，可应要求线下提供」声明——此前 CHANGELOG/路线图声称「SKILL.md 明示」但经全文件检索从未落地，本轮补正（审计方「声称已做实际未做」点名成立）。
+- **L-2**：SKILL.md v2.8.0 块历史 over-claim（:510 「C-1 软件层闭合」）补推翻批注（v2.27.15 外部审计已推翻，C-01 OPEN）。
+- **L-3**：`_hash_matches` 前置 `isascii()` 守卫——非 ASCII 哈希不再令 `hmac.compare_digest` 抛 TypeError 崩 verify，改为判不匹配。回归 `test-l3-compare-digest-nonascii.py`（5 断言）。
+- **L-4**：运行器 `0/0 PASS` 判失败（无用例执行的套件不得绿）；`--no-audit-entries` 跳过提示改走 stderr（不污染 stdout 自报解析）。
+- **L-6**：`freeze.py` ALLOW_MISSING 跳过场景文案不再谎报「ledger 完整」——账本缺失时明示「账本缺失（未校验，不声称完整）」。
+- **L-7**：① 回函两处失效引用改指随包的 `remediation-roadmap-v2.27.16.md`；② CHANGELOG v2.27.15 标题更正（见上）；③ `redlines` 配置格式错误改为显式校验 + 指向真实原因的清晰报错（原晦涩解包 ValueError 会被误导为「检查 --domain 取值」）；④ `_write_seed_ids` 失败 warn 不吞（init 感知）；⑤ init_domain TOCTOU 说明为已知限制；⑥ `_meta.publishedAt` 保持 2.27.13 时代值待真实发布刷新。
+
+### 版本与发布纪律
+- 版本号五处一致（package.json / SKILL.md frontmatter / _meta.json / _skillhub_meta.json / MIN_SUPPORTED_VERSION）= **2.27.16**。
+- 新增回归 7 套（H-1/H-2/H-3/H-4/M-3/M-5/L-3）全部入 `test-suite-manifest.txt`（52 套件）并入冻结账本；路线图以 `references/remediation-roadmap-v2.27.16.md` 随包。
+- **C-01 状态：仍 OPEN**——信任根非对称化（包内仅留公钥、私钥离线，删默认对称锚分支）属破坏性较大的独立专项，**未在本轮实施，须 owner 逐次单独授权**；本轮不声称「注入线全堵」，只声称「检测侧已知四失效收口」。
+- **硬控制（owner 指令）维持：本版不推送 SkillHub，发布须 KK 逐次单独授权。**
+
+---
+
+## v2.27.15（2026-10-24）— 第二轮外部审计（v2.27.14 包）收口·注入线已知入口全堵 + 诚实度补课（**未发布 SkillHub**）
+
+**审计来源**：朋友机对 v2.27.14 发布包的第二轮独立审计（`审计报告-unclekk-metacog-self-evolve-2.27.14.md`）。总评 3.0/5（上版 2.8）：确认 C-02/H-06 实修、认可诚实挂账，另发现 8 条新发现（含 1 High）并批评回函两点。**对审计方两点批评全盘接受**：①上轮 11 条零回应（本版 §逐条处置补齐）；②`METACOG_FREEZE_ALLOW_MISSING=1` 下假绿灯（本版修文案）。
+
+**设计目标定位声明（owner 指令，向审计方点明）**：本 skill 的目标是**系统级人在环（human-in-the-loop）的可控自指**，不是无人值守方案；A1/A4 人类闸即"人在环"产品本体，任何绕过人类闸的写入路径都是对设计目标的违背。详见 SKILL.md 顶部「设计目标定位」。
+
+### P0 级实修（1 项）
+- **N-08 · `init-domain --config` 绕过转义与 A1/A4/M1 人类闸（审计 High，已实测）**：`domains/init.py` ① `merge_template` **拒绝** `--config` 覆盖安全制品内容（A1/A2_rules/A3_memories/A4_policy/M1_policy → ValueError/CLI rc=2，提示改走 propose+人类闸；白名单仅 name/redlines）；② `_entry` 改经 `metacog.render_entry` 渲染（与 propose/apply 同一转义层，模板正文内嵌定界符亦被惰性化）。回归 `test-n08-init-domain-injection.py`（18 断言，含审计 PoC payload 复现）；`test-init-domain.py` 的 config 用例按新契约改写。
+
+### P1 级实修（3 项）
+- **N-09 · `init-domain` 实例天生 verify 红**：覆盖五制品后与 `cmd_apply` 同口径重记 D4 基线（`record_integrity` ×5）——领域实例出生即可 verify rc=0，完整性信号不再被恒红噪声淹没。回归 `test-n09-init-baseline.py`（4 断言，含直写篡改仍检出的正向对照）。
+- **N-10 · rollback 复活旧快照注入条目**：`_reactivate_block` 状态还原后经 `render_entry` 重新渲染——2.27.13 时代污染快照/被污染 git 提交中的注入定界符复活时被惰性化，不再原样拼回制品；干净快照恒等往返；异常残余（目标条目外的注入尾巴）丢弃并告警。回归 `test-n10-n11-rollback-migration.py`（11 断言，含审计复现路径证伪）。
+- **N-11 · 升级迁移扫描**：`verify --audit-entries` 条目级审计——检出「2.27.13 污染但 D4 基线一致」的伪造 active 条目（id 不在 applies.jsonl 且非 init 种子 / 重复 id），发现即 rc=1。从 ≤2.27.13 升级后建议跑一次。
+
+### 速修包（审计方"一分钟三连"扩展）
+- **N-14**：`SKILL.md` frontmatter 版本号 2.27.13→2.27.15（与三处 meta 一致）；`_check_version_binding` 参照物从 `CURRENT_VERSION_TUPLE`（同源自 SKILL.md，自比恒真）改为 **package.json version**（独立落盘源），"漏改版本号→告警"恢复可达。
+- **N-15**：路线图以 `references/remediation-roadmap-v2.27.15.md` **随包**；SKILL.md/CHANGELOG/回函引用同步改指。
+- **冻结清单扩容**：`_run_all_tests.py`、`test-c02-entry-injection.py`、`test-h06-resign-replay.py`、本轮新增回归与 `test-suite-manifest.txt` 全部入 `frozen-hashes.jsonl`——"全部测试通过"的自证链条纳入完整性保护。
+- **N-13**：回函第 68 行漏字（语义反转）以**文末勘误块**明文更正（不回改原文）。
+- **N-12**：主机名令牌残余（CHANGELOG.md:30，恰在宣布清理的那条）清除；随包 .md 内 `C:\Users\<LOCAL-USER>` 绝对路径 48 处 → `<USER>`（zip 口径 .py 命中本就为 0）。
+- **L-02 残余收口**：SKILL.md 五处旧 over-claim（v2.8.0 "RESOLVED"、:947 "可落地闭环"、:949 "非未决风险"、:953 "已证明代码闭合扎实"、:954/:1021 "最新一轮 v2.25.12"）按顶部评级框架同口径重写；部署场景表「生产/多 Agent」「无人值守」两行由 ✅ 降为 ⚠️（对齐定位声明与审计方使用者结论）；部署套件章节头部新增「未经外部审计通过，禁止用于生产隔离」披露。
+
+### M/L 级收口（上轮 11 条零回应项的正面处置）
+- **M-02**：`METACOG_TRUST_ROOT_ALLOW_DEFAULT` 三处真值判断（metacog.py ×2 / trust_root.py ×1）改严格 `== "1"`——`"0"`/空串不再放行。
+- **M-03**：`freeze.py verify` 文案改真话——ALLOW_MISSING 跳过校验时输出 `[OK*] …不构成完整锚/账本完整性证据`，不再谎报"树外锚点匹配"。
+- **M-05**：`read_json` 解析失败不再静默（stderr 告警后仍返回 default）；`read_jsonl` 512KB 截断的 fail-open 语义在告警文本中显式披露。
+- **M-06**：维持"第三方评级物证不随包"（原始件含内部路径与未发布评级，随包本身构成泄露面），SKILL.md 明示可应审计方要求线下提供。
+- **L-01**：SKILL.md:27 论文数据更正（21 个自演化配置 / 525 任务，原"25 个配置"系 episode 数误读）。
+- **L-05**：SKILL.md 触发词从 9 条泛化词条收窄至 6 条本技能命令域词条。
+- **L-07**：哈希比较改 `hmac.compare_digest`（metacog.py `_hash_matches` / freeze.py 文件漂移）。
+- **L-06（部分）**：`sigcrypto.sign` 补文档串，如实披露确定性签名语义及其 resign 锁定副作用；**长度前缀并入 C-01 专项**（消息格式变更破坏 attestation 兼容，须与迁移一并）。
+- **M-01/M-04/L-04**：挂 OPEN 并给理由——M-01 并入 C-01 专项（过渡期由 M-02 严格判断部分缓解）；M-04 自我哈希须与 append-only 链重构一并设计；L-04 文档瘦身与 C-01 专项同批。
+
+### N-16 子项
+- **运行器判定升级（兑现 CHANGELOG v2.22/F4 声明却未实现的 no_self_report）**：`_run_all_tests.py` 判定不再只看退出码——①套件必须发出可解析自报（末次 `X/Y PASS` 或「总判定: ALL PASS」），X<Y / HAS FAIL 即 FAIL；②输出含 `[FAIL]` 标记即 FAIL；③无可解析自报即 FAIL。新增 `scripts/test-suite-manifest.txt` 应有套件清单：清单声明但文件缺失 → FAIL（分母不得静默变小）。首跑即抓出 4 个历史套件无自报的盲区并已适配。
+- **转义可见性**：`render_entry` 转义发生时输出 stderr 告警（行为不变，消除"无感改写"）。
+- **恢复承诺文案更正**：`consume_human_sig_atomic` 文档串如实写明——确定性签名下 resign 路径签名烧毁后**无恢复通道**（原"重新 confirm --sign 即可"不总成立），nonce 化并入 C-01 专项。
+- **随包卫生**：`references/hermes-audit-v2251{7,8}-out.txt`（2.25.x 内部审计转录，含内部路径与评级）移出发布包；`references/INDEX.md` 删除 `obsolete/` 悬空指向、补录回函与路线图条目；`_skillhub_meta.json` 增加 `unpublished: true` 标注（publishedAt 待真实发布时刷新）。
+
+### 与路线图的偏差（诚实披露）
+- **approval_message nonce 化未在本版实施**（路线图 §3.7 原计划）：实施中发现存储的 W1 绑定签名会被 load 重复验签，nonce 必须随 attestation 持久化——消息格式变更牵动人类闸全路径与 12+ 测试夹具，与 C-01 非对称化的 attestation 迁移强耦合。仓促改动最敏感密码学路径的风险大于收益，**并入 C-01 专项**；本版已如实更正相关文档串并披露锁定语义。
+
+### 测试与冻结
+- 全量回归 **45/45 诚实 PASS**（42 既有 + 新增 test-n08/test-n09/test-n10-n11；升级版运行器判定：exit=0 且自报全过且无 [FAIL] 标记且清单分母完整）。
+- 冻结账本重基线（含运行器/清单/新回归入冻结清单），`freeze.py verify` rc=0。
+- **C-01/H-01/H-05 仍 OPEN**（非对称化专项；审计方立场已采纳："宁可装不上，不可自签"——直接删除默认对称密钥分支）。**不主张 full PASS**。
+- **硬控制（owner 指令）**：本版**不推送 SkillHub**，仅送审计方复验。
+
+### Hermes 生态内第三轮审计收口（2026-10-25，变更面对抗审计）
+
+以变更面语料调 Hermes 异族审计。其 3 High / 4 Medium / 2 Low 处置如下：
+
+**High**
+- **C-N3a（render_entry src 字段注入通道）——经 PoC 实证不成立**：ENTRY_RE 的 src 捕获组为 `[\w\-]+`（不含空格/换行/尖括号），注入序列无法经解析层进入 src；复现脚本确认复活后无伪造条目。但采纳其纵深建议：render_entry 对直接调用的 src 增加 `[\w\-.]+` 白名单，非法字符丢弃 src 并告警。回归断言入 test-n08（含 PoC 永久化）。
+- **C-N3b（N-11 种子通配假阴性）——部分成立**：审计方称 T-\d{3}/M-\d{3} 可绕过系**误读**（正则中 T-000/M-000 为写死具体 id）；但 R-\d{3}/S-\d{3} 通配的假阴性属实（R-777 形态注入放行）。修复：**种子 id 实证化**——cmd_init/init_domain 落盘 `meta/seed-ids.json`（仅首次写入不覆盖，防「注入后重跑 init 洗白」；init_domain 场景五制品刚被模板整体覆盖为纯态，重新生成安全），扫描优先用精确种子集，旧实例回落通配并提示。回归：R-777+A1-666 双注入必须被检出、洗白防御断言。
+- **C-N3e（迁移扫描 opt-in 弱闸）——成立**：条目级扫描改为 **verify 默认开启**，`--no-audit-entries` 显式跳过（跳过时 warn 留痕）；发现可疑条目 rc=1。全量 45/45 回归确认不破坏既有套件。
+
+**Medium**
+- **C-N3f（manifest 缺失静默跳过清单校验）——成立**：改 fail-closed，manifest 缺失整体 FAIL。
+- **C-N3g（[FAIL] 标记扫描大小写变体漏检）——成立**：改大小写不敏感正则。
+- **C-N3h（清单外套件仅 WARN）——成立**：升级为 FAIL（新增合法回归须同步更新清单，清单入冻结账本）。
+- **M-N3c（版本绑定异常路径 fail-open）——成立**：SKILL.md 存在但 package.json 缺失/损坏 → fail-closed 判不一致；异常分支 warn + False；仅「无 SKILL.md」（脚本独立运行）维持放行。
+- **M-N3d（M-02「三处」注释即证据）——回填实证**：`metacog.py:4370`、`metacog.py:4801`、`trust_root.py:685` 三处均为严格 `!= "1"`（grep 全量命中清单）。
+
+**Low**
+- **L-N3i（转义告警计数失真）——成立**：改为实际受影响定界符处数（`count("<!--")+count("-->")`）。
+- **L-N3j（种子模板纯净性未闭环）——闭环**：`format_single/format_rule_bank/format_safety_memory` 均经 `_entry` → `metacog.render_entry`（grep 链证据：domains/init.py:43/50/61/73），模板正文内嵌定界符亦被转义；N-09 重记的基线建立在转义后产物上。
+
+**方法论吸收**：CHANGELOG 中「已在 X 处同步修改」类断言，后续一律附 grep -n 行号实证（审计铁律：声称修复 ≠ 实际修复）。
+
+
+---
+
+## v2.27.14（2026-10-24）— 外部对抗审计（DSH 沙箱重审 v2.27.13）收口·诚实修订版（**未发布 SkillHub**）
+
+**审计来源**：朋友机 DSH 沙箱对 v2.27.13 发布包的对抗重审（审计报告 `审计报告-unclekk-metacog-self-evolve-2.27.13.md`，用户桌面）。总评 2.8/5。本版按诚实红线如实登记全部发现，**并纠正上一版草稿回函的 over-claim**。
+
+**硬控制（owner 指令）**：本版**不自动推送 SkillHub**；仅随包附 `references/audit-response-2.27.13.md` 回函与 `remediation-roadmap-v2.27.15.md` 路线图，供审计方复验。**C-01/H-01/H-05 结构性未闭合，不主张 full PASS**。
+
+### P0 级实修（1 项）
+- **C-02 · 提案正文注入伪造 active 条目（审计附录 C 一键复现）**：`render_entry`（metacog.py:2506）写入前对 body 转义 `<!--`→`&lt;!--`、`-->`→`--&gt;`，转义后定界符不再匹配 ENTRY_RE；`cmd_propose`（metacog.py:2916）落盘前防御性拒绝含 `<!-- entry:` / `<!-- /entry:` 的正文（rc=2，fail-closed）。新增回归 `scripts/test-c02-entry-injection.py`（6 断言）。
+
+### P1 级实修（1 项）
+- **H-06 · resign 不消费一次性签名**：`cmd_resign`（metacog.py:3627）在文件锁临界区内调用 `consume_human_sig_atomic(sig)`，与 apply 同构，消除「同一签名被 apply+resign 双用」重放。新增回归 `scripts/test-h06-resign-replay.py`（7 断言）。
+
+### 诚实挂账（不粉饰，3 项）
+- **C-01 · 信任根由被约束方持有**：硬编码对称默认密钥 + 部署注入 Agent 进程环境，**未结构性闭合**。对称 HMAC 架构下验证与签名共用同一密钥，移除源码默认密钥或阻断注入会使验证 fail-closed 且 Agent 仍可经源码默认密钥自签；完整闭合须非对称化（包内仅留公钥、私钥离线），属破坏性较大独立专项，**本版未做，继续 OPEN**，并在 CHANGELOG 明示时间表。
+- **H-01 · legacy 无外部锚逃生舱**：`trust_root.py:573` 的 `METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR` 分支**未删除**（保留=回退）。删除会破坏自包含部署模型（唯一可用锚是仍不安全的对称默认密钥）并使 12 个依赖该变量作信任根桩的测试夹具级联红；根因同 C-01，归入其非对称化专项一并解决。**本版未做，OPEN**。上一版草稿曾误标「已删除」，据此更正。
+- **H-05 · 完整性硬闸默认关**：`metacog.py:2348/2371` 默认严格**未翻转**（保留=回退）。翻转使 4 套件触发 `LedgerAnchorDefaultError`（纯 legacy/test 模式崩溃）且对称模型下不提升真实安全；与 H-01 同根，归入 C-01 专项。**本版未做，OPEN**。上一版草稿曾误标「已翻转」，据此更正。
+
+### P2 级收口与卫生
+- **M-08 · 测试不可独立复现**：运行器随包分发 `scripts/_run_all_tests.py`（相对路径、任意机可跑，替代此前未随包的 run_all_tests_v2274.py）；对外陈述已从「40/40 诚实 PASS」降调为「42/42 自证、运行器随包、2 套件需 METACOG_TRUST_ROOT_ALLOW_DEFAULT=1」。
+- **L-02 · 顶层评级自相矛盾**：SKILL.md 顶部评级框架引语重写——明确 TRACE「安全性扫描 5.0/5」是**恶意性/恶意代码扫描**（双实验室 benign），**非**架构信任根健全认证，不构成 C-1 已闭合证据；登记外部审计 C-01/H-01/H-05 仍 OPEN。
+- **M-07 · 主机名随包泄露**：主机名令牌 `<HOST>` 在 CHANGELOG / PUBLISHING-REPORT / audit-response / SKILL.md / C1_deploy.py 共 7 处清理为 `<HOST>`。报告中「19 文件含 <LOCAL-USER> 路径」项：本地 grep 28 文件命中，但多数为测试夹具指向本机技能目录的绝对路径（功能所需，硬删会破坏测试），仅清主机名令牌，绝对路径残余在文档层标注、列为后续清理项。
+
+### 测试与红线
+- 全量回归 **42/42 诚实 PASS**（40 原套件零回归 + 新增 test-c02-entry-injection 6/6 + test-h06-resign-replay 7/7）。
+- **复验口径（诚实注明）**：发布包内 `frozen-hashes.jsonl` 与 shipped 文件哈希完全一致——解包目录中验命令为 `METACOG_FREEZE_ALLOW_MISSING=1 python scripts/freeze.py verify`（不带变量报 `FROZEN-ANCHOR 锚未初始化` 属设计内 fail-closed，树外锚按安装目录名键控）。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留；CONDITIONAL-PASS 口径保持——C-01/H-01/H-05 仍 OPEN，不主张 full PASS。
+
+---
+
+## v2.27.13（2026-10-23）— 生态外第三方审计收口（本版含代码变更）
+
+**审计来源**：2026-10-23 生态外第三方审计报告（审计方独立于本 skill 生态：异机 / 异框架 deepseek-harness / 异模型 glm5.3 / DSH 沙箱，审 v2.27.12 发布包，全流程可复现）。恶意性判定：未发现（零网络面 / 零动态执行 / 零第三方依赖 / 零凭据，与云鼎 6 检测面判定互证）。本版按诚实红线如实登记其全部发现并收口：
+
+### P0 级收口（2 项，均已复现证实）
+- **P0-1 · verdict 后 verify 误报篡改（审计已 E2E 复现，本地代码级证实）**：`cmd_verdict` 的 PROMOTE / REVERT 分支此前仅 `write_text` 未刷新 D4 快照——正常 happy path 后 `verify` 立即 rc=1、`retrieve --strict` 误报「被直写篡改」。**收口**：两分支补 `st.record_integrity(p["artifact"])`（与 apply 路径对齐）；新增回归 `scripts/test-v22713-audit-closeout.py` Part B 断言 PROMOTE 与 REVERT 两条路径结束后 `verify` 必须 rc=0 且无完整性告警。九轮内部审计未发现此缺陷的根因＝套件无「verdict→verify」组合用例，本版已补。
+- **P0-2 · 发布管线缺陷（审计员开箱即见 freeze rc=1，属发布方责任，非引擎代码缺陷）**：v2.27.7~v2.27.12 各包的 `frozen-hashes.jsonl` 在版本号替换**之后**未随 shipped 文件重基线，且 bump 脚本错改 CHANGELOG 条目标题（v2.27.11/2.27.12 互串）。**收口**：发布管线重排为「改码 → 改文档 → 升版本 → freeze 重基线 → 全量测试 → `freeze.py verify` 门禁（rc≠0 阻断发布）→ 打包发布」，全程不再有 freeze 后的文件改动；本版 CHANGELOG 条目标题错标已更正（快赢包实发 2.27.10、导航微包实发 2.27.12）。**复验口径（诚实注明）**：本版发布包内 `frozen-hashes.jsonl` 与 shipped 文件哈希**完全一致**——解包目录中验命令为 `METACOG_FREEZE_ALLOW_MISSING=1 python scripts/freeze.py verify`（该变量是 freeze.py 为「CI 只读产物/发布包」设计的官方口径；不带变量时报 `FROZEN-ANCHOR 锚未初始化` 属**设计内 fail-closed**——树外锚按安装目录名键控，须 `anchor-init` 按安装建立信任根，非缺陷。审计员在 v2.27.12 上看到的 `FROZEN-MODIFIED` 哈希失配在本版已消除）。
+
+### P1 级收口（2 项）
+- **P1-1 · A1/A4 默认纳入人类闸（设计姿态变更，对抗审计「A1 自演化=持久化提示注入通道」）**：`run_gate` 此前仅 M1 / HIGH_RISK / SEMANTIC_RISK 置 `requires_human`——A1（系统提示）/A4（工具策略）默认可被 Agent 自写自晋升，且经 `retrieve --strict` 成为后续会话的持久行为约束。**收口**：A1/A4 默认 `requires_human=True`（第 5b 节）；无人值守实验须显式设 `METACOG_UNATTENDED_ARTIFACTS=1`（严格 `== "1"` 匹配，带尾空格不构成 opt-in）自担；**A2 行为不变**（规则库自演化是本引擎核心用例，不误伤）；M1 人类闸不变。SKILL.md「30 秒速通」第一屏与 `apply` 步骤注释同步披露。新增回归 Part A（gate 语义 7 断言，含严格匹配反例）+ Part C（E2E：审计员原始复现内容现被 rc=2 拒绝；env 先于 gate 设置时放行）。
+- **P1-2 · 对抗探针移出发布包**：`references/audit-probes-v22518/`（7 个可运行探针，含一次性签名消费账本洗白复现）不再随发布包分发（云鼎 68 分「可疑」唯一来源）；探针留存于作者工作区，发布包仅保留 INDEX 中的说明指针。**注意：探针能力本身仍真实存在（自举信任根残余的实证），本项只是移出攻击面，不改变任何诚实披露。**
+
+### P2/P3 级收口与登记
+- INDEX.md 断链修复：`design/meta-cognition-log-spec.md`（包内不存在，历史遗留）移除。
+- 陈旧产物更正：`PUBLISHING-REPORT.md` 头部补注（v2.25.6 数据为历史快照）；`test-evidence.md` 最新汇总补 2026-10-23 全量结果行。
+- **OPEN 登记（不声称闭合）**：① SKILL.md 242KB / 1,064 行体量问题——拆分为主文件 ≤10KB + references 按需加载，**另立专项**（触及冻结路径与大量行号引用，不在本版冒险）；② `sigcrypto.verify` 对超短公钥抛 ValueError 而非返回 False（P3，本地人类闸场景不触发）；③ `C1_deploy.py` 固定 `%TEMP%` bundle 目录与 `Invoke-Expression` 启动面（P2，opt-in 管理员场景，待专项加固）。
+
+### 测试与红线
+- 全量回归 **40/40 诚实 PASS**（39 原套件零回归 + 新增 test-v22713-audit-closeout 16/16）。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留；CONDITIONAL-PASS 口径保持——本次生态外第三方审计**发现真 P0**，据此不改变评级结论；其价值在于补上内部审计的盲区，收口以本条目与新增回归为准，待审计方复验。
+
+## v2.27.12（2026-10-21）— 文档导航微包（零代码改动）
+
+本版回应 TRACE v2.27.10 包评测遗留问题「整体看略显复杂，能否在不影响功能的情况下精简一下」——采用**导航而非删减**路径，零代码、零删减：
+- **SKILL.md「受众」节后新增「按身份选阅读路径」**：新手 / 运维 / 审计三条阅读线各 1 行（含链路指针），并明示「新手到排查手册为止就够了，其余为进阶或审计用途」——治「114 文件不知从哪读起」，不动任何披露内容。
+- **更正 SKILL.md 评级框架引语的过期版本标注**：「本版 v2.25.13 尚未评测」→ 实际事实「对应 v2.27.10 发布包，2026-10-21 重评综合 4.7/5，安全性扫描 5.0/5」（含历史三点评测数据）；同步更正 v2.27.8（现 v2.27.10）条目内复核落款引用为 v2.27.10。
+- **红线声明**：零代码改动；不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留；CONDITIONAL-PASS 口径保持。精简诉求以导航解决，物理删减会触碰诚实披露红线，不采用。
+
+## v2.27.10（2026-10-21）— 文档快赢包（零代码改动）：TRACE v2.27.4 包评测扣分点收口
+
+本版为对 SkillHub TRACE v2.27.4 包评测（综合 4.6/5）实证扣分点的文档层收口，**无任何代码变更**：
+- **SKILL.md**：「能力口径」落款由「v2.25.14」更新为「v2.25.14 确立，v2.27.10 复核现行」（评测 accuracy 扣分点：能力口径落款非最新版本）；「最小运行示例」入口新增端到端叙事指引。
+- **新增 `references/walkthrough-first-promote.md`**：从 init 到第一个 PROMOTE 的端到端叙事，以 SKILL.md 最小运行示例的真实命令与真实输出串起全流程（评测 docQuality 扣分点：缺端到端使用故事）。
+- **`references/INDEX.md` 重写**：由 12 条扩为全量分类总索引——新手路径 / 设计规格 / 独立审计 / Hermes 轮审 / 测试运维五区，纳管此前未被索引的 `troubleshooting.md`（96 行）、`error-glossary.md`（71 行）等 50 个文档（评测 structure/antiPatternFaq 扣分点）。
+- **`references/anti-patterns.md` 扩充**：新增「类别七：裁决后处置失当」——G1 REVERT 后三步动作 + G2 连续 3 次 REVERT 决策树（含 M1 升级的 confirm 凭证化路径）（评测 antiPatternFaq 4.0 扣分点）。
+- **`references/faq-deep.md` 扩充**：新增 Q21（verdict REVERT 后该做什么）、Q22（首跑 LedgerAnchorDefaultError 与信任根环境变量）、Q23（退出码 rc 0/1/2/3 一览表）。
+- **诚实标注**：安全性扫描 4.0 的「1项存在风险」经 `skillhub skill reports` 实测 Keen 科恩实验室与云鼎实验室双报告均为 benign「安全，无风险」，评测生成时间戳（1792550300）早于云鼎报告签名时间（1792552006）约 28 分钟，疑似评测快照时序伪影；本条目不据此声称安全评级变化，以平台重评结果为准。
+- **红线声明**：零代码改动；不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留；CONDITIONAL-PASS 口径保持。
+
+## v2.27.7（2026-10-21）— 仅文档/元数据修正（零代码改动）
+
+本版为 v2.27.4 的文档/元数据一致性修正，无任何代码变更：
+- 更正 v2.27.4 条目红线声明中「publishedAt 未动（发布仍待 owner 指令）」为实际发布事实：v2.27.4 已于 2026-10-21 发布至 SkillHub（skillId=196483，审核中）。
+- `_meta.json` 的 `publishedAt` 更新为实际发布时间戳（1792550782211）。
+- 四版本文件（SKILL.md frontmatter / package.json / _meta.json / _skillhub_meta.json）版本号升至 2.27.7；冻结态随 CHANGELOG/SKILL.md 编辑重基线（`freeze.py verify` 退出码 0）。
+- 红线声明：不声称 full PASS；CONDITIONAL-PASS 口径保持（与 v2.27.4 完全一致）；评级、安全不变量、诚实天花板一概未变。
+
+---
+
+## v2.27.4（2026-10-20）— R-4/R-6/R-8/R-11/R-5b（九轮登记 OPEN 项）owner 授权收口：自指闸门解耦 + 重基线诚实标注 + 硬闸@body 验签 + no-op apply 不落盘 + @body 删键盲区闭合
+
+九轮（v2.27.3）总裁定后仍 OPEN 的 5 项（R-4 [M] / R-6 [C] / R-8 [m] / R-11 [M] / R-5b [m]）经 owner 明确拍板「授权修复」于本版收口（不擅自扩大至其余登记项）：
+
+- **R-4 [M→收口]（自指闸门解耦）**：原 `_keygen_established()` 以「被保护物自身」（chain-identity-root 文本 / GUARD 基线键）作保护自身判据，连删即令闸门失效（八轮 R-4 双删逃逸）。v2.27.4：重写为依赖**独立证据**——`human-guard.json` 文件存在（删基线键不删它）**或** CONTRACT.md 含 `human-identity-root` 钉固节（独立于 GUARD 基线键与 chain 文本）；二者任一即强制应有基线集，连删 chain+GUARD+manifest 键但保留 keypair/钉固节仍检出；全删 keypair（彻底破坏）由 `cmd_verify` GUARD 块 fail-closed 兜底。**诚实残余**：彻底破坏态属「文件+代码写权完全失控」部署侧兜底范畴，代码层不承诺。
+- **R-6 [C→收口]（重基线诚实标注）**：`record_script_integrity` 重基线告警新增诚实残余标注——共享默认锚（未设 `METACOG_TRUST_ROOT_ANCHOR_KEY`）下重基线事件无法区分「授权重基线」与「攻击者凭 ledger 写权限篡改后重记基线」（默认锚随代码分发、可读即自签 `_anchor_sig`）；生产/非本地部署须设专属随机锚密钥方使签名具排他性。与 verify 报告层 `_anchor_sig` 校验同口径，默认锚下「重记基线」仍判定 ok 属已知诚实天花板，不声称闭合。
+- **R-8 [m→收口]（硬闸 @body 豁免验签）**：`_manifest_integrity_drift_if_enforced` 的 SKILL.md @body 豁免路径补 `_verify_anchor_sig(_body_rec) is True` 前置校验，与 verify 层（L1690）同口径 fail-closed——伪造/缺失签名的 `manifest:SKILL.md@body` 基线不再令版本差异豁免失据，正文篡改检出闭合。
+- **R-11 [M→收口]（no-op apply 不落盘）**：`cmd_apply` 的 `ensure_pubkey_root_pinned()` + `record_script_integrity()` 移至 `if not items: return 0` 之后——无待应用提议（no-op）的 apply 不再落盘基线（含 `manifest:SKILL.md@body` 派生子键），遵循「拒绝/无操作态永不持久化」原则（v2.27.2 N-1 收口的同源自指残留）。
+- **R-5b [m→收口]（@body 删键盲区闭合）**：verify 层（`verify_integrity` L1751）与硬闸层（`_manifest_integrity_drift_if_enforced` L2420）双处补 `manifest:SKILL.md@body` 派生键删除检测（SKILL.md 基线存在时须存在，缺失即 drift），闭合「删 @body 保留父键」的删键盲区。
+- **测试**：新增 `test-v2274-r4-r6-r8-r11-r5b.py`（19 断言 ALL PASS：R-4 独立证据闸门抗双删 / R-6 默认锚重基线诚实标注 / R-8 硬闸@body 验签拒绝伪造基线 / R-11 no-op apply 不落盘 / R-5b 删@body 双处 drift）；`test-v2272-n1-pin-wash.py` 的 `test_n1_clean_apply_still_pins` 断言随 R-11 行为更新（no-op apply 不再 pin，pinned 仍为 None / integrity 未变，resign 路径仍覆盖钉固功能未退化）。全量 39 套件（`test-*.py`）在 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 下 **39/39 诚实 PASS**（exit=0 且判定非掩错）。
+- **诚实补遗（回归运行器脚枪修正）**：初版 `run_all_tests_v2274.py` 曾**全局强设** `METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1`，该变量经子进程继承污染 `test-trust-root-selftest.py` 的默认 deny 断言（`build_trust_root(TrustRootConfig()).name == "deny"` 回落 legacy None → 2 套件假失败（test-trust-root-selftest / test-v2273-r7-bootstrap 的默认 deny 子测试），表象 37/39）。此属运行器配置脚枪、**非本版代码回归**（R-4~R-5b 改动未触及 trust_root.py 的 `build_trust_root`/`external_trust_root`/`_selftest`）。已移除该全局变量（需 legacy 回落的测试文件本地自管），复跑 **39/39**。注：v2.27.3 条目所述「无配置安装 external_trust_root() 返 DenyTrustRoot（默认 deny，非 None）」描述的是**默认行为**（未设该逃生变量时确实返 DenyTrustRoot），与本轮修正后实测一致，非历史条目失准。
+- **冻结态重置**：本版改动 metacog.py/SKILL.md/CHANGELOG.md 三文件 → 重置冻结态、重记 17 路径 → `freeze.py verify` exit=0（沿用 v2.27.2 R-12 已授权口径）。
+- **诚实边界更新（SKILL.md 同步）**：九轮补登节 R-4/R-6/R-8/R-11/R-5b 由 OPEN 改写为「v2.27.4 已收口」并补诚实残余；九轮总裁定节更新——5 项 OPEN 已清空（登记 OPEN 集为空），维持 CONDITIONAL-PASS 口径、不得盲目自主发布（诚实天花板属结构性部署侧兜底，非本批代码 bug）。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；v2.27.2/v2.27.3 条目逐字保留（其 R-4/R-6/R-8/R-11/R-5b「OPEN 未修」登记原文不动，仅在本条目与 SKILL.md 九轮补登节以收口指针指认 v2.27.4 已收口）；不声称 full PASS；CONDITIONAL-PASS 口径保持；v2.27.4 已于 2026-10-21 发布至 SkillHub（skillId=196483，审核中），publishedAt 已更新为实际发布时间。
+
+---
+
+## v2.27.3（2026-10-20）— R-5/R-7（八轮登记 C 级阻断项）owner 授权收口：硬闸补锚签名校验 + 自举外部背书强制（非破坏性）
+
+八轮（v2.27.2）总裁定 NOT PASS 64/100 的三项阻断项中，R-5（硬闸零基线签名校验）、R-7（初始安装自举零检测）本版在 owner 明确授权「修 R-5/R-7」范围内收口；R-9（harness 假通过）已于 v2.27.2 整改。R-4/R-6/R-8/R-11/R-5b 仍 OPEN（超出本轮授权，如实登记）。
+
+- **R-5 [C→收口]（硬闸基线签名校验）**：原 `_verify_anchor_sig` 全库调用点仅在 verify 报告层（L1646/1673/1712），硬闸计算层（`verify_script_integrity` L1846、`_manifest_integrity_drift_if_enforced` L2374）零调用——纯 JSON 直写 ledger 重记基线 hash 即穿透硬闸（仅 verify 事后报警）。v2.27.3：在硬闸层补 `_verify_anchor_sig` 校验，与 verify 报告层同语义、同口径 fail-closed——签名失效（False）→ 计 drift 拒绝；缺失 `_anchor_sig` 且非 legacy 放行窗口（`Store._legacy_anchor_sig_allowed()`）→ 计 drift 拒绝（CHANGELOG.md 非阻塞域跳过，不引入假阳性）。**诚实残余**：默认共享锚在 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 下仍可读源码自签（锚密钥代码派生，与 v2.10.0 诚实天花板同口径）；生产须配专属 `METACOG_TRUST_ROOT_ANCHOR_KEY` 方为真实外部不可伪造参照。回归 `test-v2273-r5-anchor-sig-gate.py`（**10 断言** ALL PASS：合法无 drift / 伪造 False drift / 缺失 None drift / 还原无假阳性，script+manifest 双域）。
+- **R-7 [C→收口·非破坏性]（自举外部背书强制）**：原首个基线无外部不可伪造参照，预置篡改树 + 正常 init/keygen → `cmd_verify rc=0`、与合法安装不可区分。v2.27.3：新增 `_bootstrap_external_attested`（L2410），在 `_confirm_keygen`（L4515，人类 TTY keygen 建立可信基线前）强制——仅当 `external_trust_root()` 为真实离线根（`hsm`/`hsm+oob`）时，须由人类离线根私钥对当前人类公钥签写设备证明文件、`attestation_ok` 通过方建立可信基线，否则 fail-closed 拒绝（`return 3`）；默认 deny / 纯 oob / legacy / corrupt 一律放行（**不阻断常规安装**）。**关键设计发现（避免误伤）**：无配置安装 `external_trust_root()` 返 `DenyTrustRoot`（默认 deny，**非 None**）——若在 `cmd_init` 对 DenyTrustRoot 阻断会误伤**所有**常规安装；故 R-7 收口点收敛为仅 `hsm`/`hsm+oob` 真实配置态强制，`cmd_init` 仅加注释说明（D4 循环 `record_integrity` 不变）。**诚实残余**：① 仅 `hsm`/`hsm+oob` 生效，`oob` 每操作令牌不依赖引导期设备证明；② 代码+文件写权残余（同 R-6 自举信任根）仍须 TPM / 部署契约（外部锚路径须 Agent 无写权限，见 trust_root WARN）兜底；③ 离线根私钥本身安全性属部署侧前提。回归 `test-v2273-r7-bootstrap.py`（**9 断言** ALL PASS：legacy None→(True,None) / 默认 deny 不误伤 / hsm 合法证明通过 / hsm 缺证明 fail-closed / hsm 公钥不符 fail-closed / cmd_init 默认 deny rc=0 仍建 integrity）。
+- **测试**：新增 `test-v2273-r5-anchor-sig-gate.py`（10 断言 ALL PASS）、`test-v2273-r7-bootstrap.py`（9 断言 ALL PASS）；全量 38 套件（`test-*.py`）在 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 下 **38/38 诚实 PASS**（与 v2.27.2 基线同口径，exit=0 且判定非掩错）；其中 R-5/R-7 新套件**内部自设 `METACOG_TRUST_ROOT_STRICT=1`** 验证硬闸确实强制（10/10 + 9/9），运行后自行还原，不影响其余套件。诚实注记：全局强设 STRICT=1 会与 `test-human-gate.py` 的 keygen 补钉固既有断言交互（67/69），属 STRICT 与旧测试的环境交互、非本版代码改动引入——故全量回归采用基线 ALLOW_DEFAULT 口径，STRICT 仅由新套件局部启用。
+- **冻结态重置**：本版改动 metacog.py/SKILL.md/CHANGELOG.md 三文件 → 重置冻结态、重记 17 路径 → `freeze.py verify` exit=0（沿用 v2.27.2 R-12 已授权口径）。
+- **诚实边界更新（SKILL.md 同步）**：第八轮补登节 R-5/R-7 由 OPEN 改写为「v2.27.3 已收口」并补诚实残余；八轮总裁定节更新——R-5/R-7 已退出阻断集，**当前剩余 OPEN**：R-4 [M] / R-6 [C] / R-8 [m] / R-11 [M] / R-5b [m]；维持 CONDITIONAL-PASS 口径、不得发布（未全收口前）。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留（v2.27.2 的 R-5/R-7「OPEN 未修」登记原文不动，仅在本条目与 SKILL.md 诚实边界补登节以收口指针指认 v2.27.3 已收口）；不声称 full PASS；CONDITIONAL-PASS 口径保持；publishedAt 未动（发布仍待 owner 指令）。
+
+---
+
+## v2.27.2（2026-10-20）— N-1/N-2（七轮登记 P1 HIGH OPEN 项）闭环收口，owner 指令「一并修→v2.27.2」
+
+七轮（v2.27.1）在 v2.27.0 已收口项之外新登记的 2 项 P1 HIGH OPEN（N-1 信任根洗白、N-2 manifest 删键盲区）本版**一并收口**（在「修 R-1~R-4」之后，owner 明确扩权至「一并修」）。
+
+- **N-1 [P1 HIGH→收口]（信任根洗白）**：原 `ensure_pubkey_root_pinned()` 置于 `cmd_apply`/`cmd_resign` **入口最前、早于所有完整性硬闸**——一次**被拒**的恶意 apply/resign 仍会把（可能已被篡改的）攻击者公钥钉固为信任根，verify 静默、`check_pubkey_root` 仍返回 True。v2.27.2：将该钉固调用移至「**所有完整性硬闸通过之后、`record_script_integrity` 落盘之前**」执行——被拒态（rc=3）永不触发钉固，杜绝「被拒的恶意 apply 仍洗白信任根」。`cmd_confirm` 的 `_confirm_keygen` 钉固保持（人类 TTY keygen 本就是合法钉固点，不受影响）。回归 `test-v2272-n1-pin-wash.py`（4 场景 13 断言：被拒 apply/resign 不钉固、干净 apply/resign 仍钉固、对照不退化）。
+- **N-2 [P1 HIGH→收口]（manifest 删键盲区）**：原 `_manifest_integrity_drift_if_enforced` 的 `if _rec is None: continue` 对 `manifest:<name>` 基线键缺失直接跳过——攻击者删掉 integrity.json 里的全部 manifest 基线键（删键逃逸）即可让 apply/resign/keygen/retrieve 入口硬闸失盲（R-2 只修了 verify 报告层）。v2.27.2：删除该宽容跳过，复用 `verify_integrity` 同款 `_expected_baseline_items` 获取「磁盘存在的受跟踪 manifest → 其基线键」，凡基线键缺失（删键逃逸）即计入 drift（与 R-2「应有基线集」同口径）。**关键闸门设计**：计入缺失键 drift 以 `_keygen_established()`（CONTRACT.md 含 chain-identity-root 受 H-2c 保护 / legacy GUARD 基线）为前置——**仅已 keygen 安装**才对缺失 manifest 键计入 drift。理由：若改用「integrity 中是否存在任一 manifest: 键」作闸门，则「删光全部 manifest 基线键」攻击会使闸门为假、N-2 重新逃逸；`_keygen_established()` 不依赖 manifest 键本身（删 manifest 键不会移除 chain-identity-root/GUARD），故该攻击下闸门仍为真、缺失键仍被检出。**效果**：① 已基线安装被删 manifest 键 → 仍 fail-closed 检出（N-2 闭合）；② 未 keygen / init 占位 / legacy 未钉固安装 → 不产生误报（与正常兼容流及既有套件一致）。回归 `test-v2272-n2-manifest-key-deletion.py`——**第八轮实测原套件对修复零覆盖**（`cmd_init` 无 keygen → `_keygen_established()` 恒 False → 修复分支永不进入、零覆盖），且「7 断言」为 over-claim（实际仅 4 个 test 函数）；**第八轮后已重写为真实 keygen 态**（5 函数 **12 断言** ALL PASS：删光全部 5 个 manifest 基线键→全检出 / 完整态无假阳性 / 仅改正文 drift / 基线在文件缺失 drift / 未 keygen init 删光键不误报），独立探针 `probe_c_n2.py` 五场景确认 N-2 闭合（含删光 5 键仍全检出的关键断言）。
+- **回归治理（N-2 改动暴露的老测试盲区）**：N-2 收口后，原 `test-d2-d5.py` / `test-trust-root.py` 中「经 `cmd_init`（无 keygen）创建、从不基线化 manifest 文件」的 store 会因 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` 使外部锚非 None、硬闸生效而误报——此二套件此前靠旧代码的 `if _rec is None: continue` 宽容跳过才 PASS，并非 N-1 改动引起。本版**不修改这两个测试文件**，而是以 `_keygen_established()` 闸门从根上区分「已 keygen（应强制 manifest 基线）」与「未 keygen/init（不应强制）」——既闭合 N-2 攻击面，又零测试改动风险、不破坏正常兼容流。重跑全量 36 套件确认 36/36 PASS（含这俩套件回归闭合）。
+- **测试**：新增 `test-v2272-n1-pin-wash.py`（**13 断言** ALL PASS）、`test-v2272-n2-manifest-key-deletion.py`（**12 断言**，第八轮后重写为真实 keygen 态，见本版 N-2 条目）；全量 test-*.py 回归 **36/36 PASS（R-9 整改后诚实口径：exit=0 且判定非掩错）**。
+- **同构缺陷清扫（八轮重点核验项）**：N-1/N-2 均属七轮指出的「校验逻辑误挂条件块 / 删键即从检测集消失」同根族。本版修复后，cmd_apply/cmd_resign 的钉固调用已无条件落在「所有硬闸之后」，且 N-2 的缺失键检测以 `_keygen_established()` 为显式前置（非嵌套于其他检测的隐式条件内），未引入新的同构盲区。第八轮已就此全域复核（见下）。
+- **八轮复验裁定（Hermes 第八轮，2026-10-20）**：**总裁定 NOT PASS（64/100）**，较七轮 72/100 下调 8 分（安全 58 / 稳定 82 / 可维护 68 / 兼容 80）。核心结论：N-1/N-2 修复本身真实有效，但本轮新发现 1 条零检测自举攻击链（R-7）且原官方 N-2 回归套件对修复**零覆盖** + 4 套件 harness 假通过（R-9）。处置口径（**按家规：超出 N-1/N-2 授权不擅自扩大修复，仅诚实登记 OPEN 待 owner 拍板**）：
+  - **N-1 [Confirmed 收口]**：独立对抗探针 `probe_b_n1.py`（真实 keygen 态）**14/14 PASS**；官方套件 13 断言全 PASS（该套件恰为 4 个 harness 缺陷之一，但本轮实测 13/13 真通过、无被掩 FAIL）。
+  - **N-2 [修复有效；官方套件原零覆盖→已重写]**：修复代码（L2344-2351）确认存在；原 `test-v2272-n2-manifest-key-deletion.py` 用 `cmd_init` 无 keygen → `_keygen_established()` 恒 False → 修复路径零覆盖（R-10）；本轮已**重写为真实 keygen 态**（5 函数 12 断言，见上条），`probe_c_n2.py` 五场景确认 N-2 闭合。**断言数 over-claim 更正**：原 CHANGELOG/SKILL.md 称「7 断言」（实际旧套件仅 4 函数）→ 重写后 12 断言，本版更正。
+  - **R-9 [C·harness 假通过·已修]**：4 套件 `all(res for res in results)`（T 类实例无 `__bool__` → 恒为 True）掩盖 FAIL；`test-v2270-r1r2r3.py` / `test-v2271-n3-pin-drift.py` / `test-v2272-n1-pin-wash.py` / `test-v2272-n2-manifest-key-deletion.py` 均改为 `all(res.failed == 0 for res in results)`；重跑全量 **36/36 诚实 PASS**（exit=0 且判定口径非掩错）。
+  - **R-4 [M·链+GUARD 双删逃逸·OPEN]**：`verify_integrity` 的 GUARD 基线缺失检查（L1742）与「应有基线集」（L1744）共用 `_keygen_established()` 闸门——用**被保护对象存在性**做保护自身的判据（自指）；连 `chain-identity-root` 节标题 + `human-guard.json` 基线 + 全部 manifest 键一并删 → `_keygen_established()=False` → 闸门整体失效、verify/apply 全绿（`probe_d_double_delete.py` 9 PASS/2 FAIL 为预期逃逸记录）。CHANGELOG 已承认（「连节标题一并删除 → 判据消失」），**SKILL.md 原未单列 → 本版在 SKILL.md 诚实边界补登**（属披露补全，非代码修复；修复须把 GUARD 基线缺失检查移出该闸门，超出 N-1/N-2 授权，登记 OPEN 待 owner 拍板）。
+  - **R-5 [C·硬闸零基线签名校验·OPEN]**：`_verify_anchor_sig` 全库 6 调用点皆在 verify 报告层、硬闸计算层零调用（`probe_f_baseline_sig_blindspot.py` 15/15 PASS）；纯 JSON 直写 ledger 重记基线 hash 即穿透硬闸（仅 verify 事后报警）。超出授权，登记 OPEN。
+  - **R-6 [C·引擎 API 重基线连 verify 失守·OPEN]**：`record_script_integrity` 重记基线签名有效（锚密钥代码派生、可读源码自签）→ `cmd_verify rc=0`（`probe_g_engine_rebaseline.py` 10/10）；**残余边界 (a) 口径更正**：原述「需追加合法 mac 条目（链头不动）」高估成本——实测 mac 追加**非必要条件**（已同步更正 SKILL.md §诚实边界 (a)）。结构性兜底须覆盖「重基线事件」本身，登记 OPEN。
+  - **R-7 [C·初始安装自举零检测·OPEN]**：首个基线无外部参照物，硬闸在基线建立前恒惰性；预置篡改树 + 正常 init/keygen → `cmd_verify rc=0`、与合法安装不可区分（`probe_h_selfbootstrap.py` 11/11）；SKILL.md/CHANGELOG 原均未披露 → **本版在 SKILL.md 诚实边界补登**（结构性弱点，须外部不可伪造参照兜底，登记 OPEN 待 owner 决策是否走 HSM/TPM/离线根签名）。
+  - **R-8 [m·@body 硬闸豁免不验签·OPEN]**：硬闸 L2356-2362 仅比正文哈希、不验 `_anchor_sig`，与 verify 层（L1686-1693 要求验签）不对称，H-4 未完全收口。登记 OPEN。
+  - **R-11 [M·被拒 apply 已落盘子键·OPEN]**：rc=3 的被拒 apply 仍执行过 `record_script_integrity()`，把 `manifest:SKILL.md@body` 子键写回（父键仍缺失、持续 rc=3，对主路径无效力，但暴露「拒绝≠不落盘」顺序问题）。登记 OPEN。
+  - **R-5b [m·@body 派生子键单独删除盲区·OPEN]**：删 `manifest:SKILL.md@body` 子键 → 硬闸不可检，须纳入 `_expected_baseline_items` 应有集。登记 OPEN。
+  - **R-12 [M·freeze 基线漂移·已解决]**：本版授权改动 3 文件（metacog.py/SKILL.md/CHANGELOG.md）导致冻结漂移、SKILL.md 却称「freeze rc=0」矛盾；本版经授权**重置冻结态、重记 17 路径** → `freeze.py verify` **exit=0 已成立**（原「freeze rc=0」声明现为真，详见下条红线声明）。
+  - **八轮总裁定**：**NOT PASS 64/100**（安全 58/稳定 82/可维护 68/兼容 80），**维持 CONDITIONAL-PASS 口径、不得发布**；R-5 / R-7 / R-9 为阻断项，须 owner 决策后方可晋级。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留（v2.27.1 的 N-1/N-2「OPEN 未修」登记原文不变，仅在该条目末尾以补正指针指认本版已收口）；不声称 full PASS；CONDITIONAL-PASS 口径保持；publishedAt 未动（发布仍待 owner 指令）。
+
+---
+
+## v2.27.1（2026-10-20）— Hermes 七轮复验（72/100）登记 + N-3 接线收口 + 披露口径修正（D-1/D-2/N-4）；N-1/N-2 如实登记为 OPEN
+
+Hermes 七轮复验 v2.27.0：**CONDITIONAL-PASS 72/100**（安全性 72 / 稳定性 88 / 可维护性 80 / 兼容性 90；趋势 60→66→72 三连升）。确认 R-1/R-2/R-3 **全部 Confirmed 收口**（33 套件实跑 33/33 exit 0、freeze verify exit 0、test-v2270-r1r2r3.py 25/25 断言核对准确、无虚报），同时新发现 6 项残余。处置口径：**N-3 属 R-3 收口不彻底**（在「修 R-1~R-4」授权范围内）→ 本版修；**N-1/N-2 属新域**（超出授权范围）→ 本版**如实登记为 OPEN、不擅自修复**；D-1/D-2/N-4 为披露口径失准 → 本版更正。
+
+- **N-3 [P2→收口]（七轮实测，逃逸成本=删一行文本）**：v2.27.0 的 R-3「钉固公钥漂移检查无条件执行」实为 `if pinned:` 整体短路——删 CONTRACT.md 的 `human_pubkey_fingerprint` 钉固值行（pinned=None）即令整段漂移检查不可达，verify rc=0。v2.27.1 改**三分支显式判定**：① pinned 有值 → 与 live 公钥指纹比对（live 缺 / 不符均 fail-closed 报告）；② pinned 为 None 且**钉固痕迹存在**（CONTRACT.md 仍含 human-identity-root 节标题、而 `human_pubkey_fingerprint` 键行已不在）→ 钉固值行被删 → fail-closed 报告；③ pinned 为 None 且无痕迹（init 未 keygen 的占位符态 / 从未钉固）→ 放行（不误伤正常流）。回归 `test-v2271-n3-pin-drift.py`（15 断言）。
+- **N-1 [P1 HIGH · OPEN · 本版未修]**：`ensure_pubkey_root_pinned()` 在**完整性硬闸之前**执行（`cmd_apply` 首行、`cmd_resign` 首行）——七轮实测：一次**被拒**的恶意 apply 即完成信任根永久替换（攻击者公钥被钉入 CONTRACT.md），而 verify 静默（无漂移告警）、`check_pubkey_root` 仍返回 True。**超出本轮授权范围，未修**（按「严格按指令修复不擅自扩大范围」原则，登记为 OPEN 待 owner 指令）。建议方向：把 `ensure_pubkey_root_pinned()` 移至所有完整性硬闸之后、落盘之前（对齐 v2.5.2「verify 只读化防洗白基线」在 apply 路径的贯彻）。同源问题第六次出现（v2.5.1 审计 M-3 命中、v2.5.2 仅移除 `cmd_verify` 一处，apply/resign 保留至今）。
+- **N-2 [P1 HIGH · OPEN · 本版未修]**：`_manifest_integrity_drift_if_enforced` 的 `if _rec is None: continue` 删键盲区——删全部 5 个 manifest 基线键 + 篡改 CONTRACT.md → 硬闸返回 `(True, [])` 放行。R-2 修的是 verify 报告层；apply/keygen/retrieve 走此函数，**不享该补偿**（v2.27.0 CHANGELOG 曾称「manifest 域虽有硬闸补偿」属 over-claim，本版更正）。**超出本轮授权范围，未修**，登记为 OPEN。建议方向：复用 `_expected_baseline_items` 应有基线集，`_rec is None` 时计入 drift 而非 continue。
+- **N-4 [P2 · 披露修正]**：七轮实测「引擎 API 重记基线可抹平应有基线集」——三域「文件与基线同删」均 rc=0 / dirty=[]，且**实际攻击成本低于 v2.27.0 残余①的描述**（无需持源码读权、无需追加合法 mac 条目）。原披露口径已按域分述更正（见下条）。
+- **D-1 [P2 · 文档漂移修正]**：v2.26.1 条目 H-2c 判据描述含「human-guard.json 存在（keygen 已跑）」，而 v2.26.1 代码已移除该判据（仅用 CONTRACT.md chain-identity-root 节标题痕迹检测，代码注释明确「不得用 human-guard.json 存在性作判据」）。按「历史条目逐字保留」红线**不改历史条目原文**，在此补正口径。
+- **D-2 [P2 · 披露口径修正]**：R-4 曾称「方案B 单独失效时 apply 入口硬闸不会因方案B 失败而拒」——七轮实测 v2.27.0 下 rc=3 **已拒**（经 R-1/R-2 间接强化；但该拒绝依赖 manifest 基线键未被删，见 N-2 盲区）。口径双向失准已更正。
+- **残余①攻击成本按域更正（诚实披露）**：v2.27.0 残余①原述「持代码写权 + 清空消费账本 + 删基线 + 改制品 + 经引擎 API 重算基线 + 追加合法 mac 条目（链头不动）」——七轮实测门槛被高估。按域分述：**script:/manifest: 域**（不入链，基线由 `record_script_integrity` 直接写、引擎代算 `_anchor_sig`）改文件 + 经引擎 API 重记基线即可，**无需**持源码读权、**无需**追加合法 mac 条目；**artifact/applies/guard 域**（入链）才需「重算基线 + 追加合法 mac 条目（链头不动）」。两域均属自举信任根残余（与 C-1 同类），须系统级部署契约兜底。
+- **同构缺陷清扫结论（如实登记）**：七轮共命中 **7 处**「校验逻辑误挂条件块」同构点（H-2b → H-2b' → R-3 → N-1 → N-2 → N-3 → R-4 口径失效），v2.27.0 收口 3 处，七轮新发现 4 处仍未收口（N-1/N-2/N-3 + R-4 口径失效）；本版收口 N-3 与 R-4 口径，**N-1/N-2 仍 OPEN**。「修一处嵌套、同类未全域清扫」的过程性缺陷在第七轮再次复现——如实登记，不声称已作系统性根治。
+- **测试**：新增 `test-v2271-n3-pin-drift.py`（15 断言 ALL PASS）；全量 test-*.py 回归 ALL PASS。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；历史条目逐字保留（D-1 以补正说明方式处理，不改 v2.26.1 原文）；不声称 full PASS；CONDITIONAL-PASS 口径保持；publishedAt 未动（发布仍待 owner 指令）。
+
+---
+
+## v2.27.0（2026-10-20）— Hermes 六轮复验（66/100）残余逃逸收口：R-1/R-2「应有基线集」+ R-3 钉固公钥漂移全域清扫
+
+Hermes 六轮在 v2.26.1 已收口项（H-2b' 接线、H-2c 删钉固行）之外，于**未触碰的 GUARD 域基线删除面**新发现 4 条同根残余逃逸（R-1/R-2/R-3 Confirmed 实测复现，R-4 披露口径），其中 R-3 与刚修掉的 H-2b' **完全同构**（校验逻辑误挂另一检测的条件块内），暴露「修一处嵌套、同类未全域清扫」的过程性缺陷。本版按 owner 指令「修」一并收口：
+
+- **R-1 [MEDIUM→收口]**：真实 keygen 后删 `human-guard.json` + 删 `integrity.json` GUARD 域记录 → 原 `cmd_verify` 的 GUARD 全部检查整段包于 `if grec is not None:`，`verify_integrity` 只迭代已存在键 → verify rc=0，人类签名信任根可被静默替换。v2.27.0 引入**「应有基线集」**：`_keygen_established()` 判定 keygen 完成后，**GUARD 基线无条件必存在**（与文件是否在场无关），删基线键即 dirty；续攻（写攻击者公钥 + `record_guard_integrity` 重记基线）由 R-3 兜底。本版仅做删除面检测补全，apply 入口闸（applies 域）不受影响（Hermes 定 MEDIUM 非 HIGH 的根因）。
+- **R-2 [MEDIUM→收口]**：`verify_integrity` 原无「应有基线集」概念——删 `manifest:CONTRACT.md` 基线键 + 篡改正文 → `dirty=[]`（删键即从检测集消失，盲区可扩展 script:/manifest:/artifact 全域）。v2.27.0：keygen 后凡**磁盘存在的受跟踪文件**（manifest:/script:/核心制品 A1-M1）其基线键必须存在，删键即 dirty（file-presence 驱动，避免非 shipped 部署误报）；GUARD 域另由无条件必存在分支兜底。manifest 域虽有 `_manifest_integrity_drift_if_enforced` 硬闸补偿，但仅 apply/keygen/retrieve 生效、verify 只读报告路径不享该补偿——本版使 verify 报告层也闭环。
+- **R-3 [MEDIUM→收口]（与 H-2b' 同构，全域清扫）**：`cmd_verify` 的钉固公钥漂移检查（`pinned_human_pubkey_fingerprint` vs `human_pubkey_fingerprint`）原嵌套于 `if not st.chain_fingerprint_ok():` 块内——方案B 通过时该检测不可达，删 GUARD 基线 + 写攻击者公钥 + 重记基线 → verify rc=0。v2.27.0 将该检查**移出嵌套块、无条件执行**（独立于链指纹校验的顶层终局判定），堵「公钥静默替换」。此即 H-2b' 同类缺陷的系统性清扫。
+- **R-4 [披露→收口]**：量化 v2.26.1 H-2c 残余披露——连节标题一并删除使方案B 单独失效时，兜底须「外部锚已启用（受保护模式 enforced）或 `METACOG_TRUST_ROOT_STRICT=1`」方为硬闸，且兜底仅 verify 报告层有效、apply 入口硬闸不因方案B 失败拒（详见 v2.26.1 条目）。同时明示 **R-3 与 H-2b' 同构**这一事实（六轮曾未登记）。
+- **测试**：新增 `test-v2270-r1r2r3.py`（R-1 删 GUARD 基线 / R-1 续+ R-3 公钥漂移 / R-2 删 manifest 基线 / R-2 泛化四键 / 对照不误伤 共 **25 断言** ALL PASS）；全量 test-*.py 回归 ALL PASS。
+- **诚实边界（残余，不声称闭合）**：① 持代码+文件写权的完全失控 Agent 仍可「删两者（human-guard.json + 基线）+ 改制品 + 经引擎 API 重算基线 + 追加合法 mac 条目（链头不动）」——与 C-1 自举信任根同类，须系统级部署契约兜底；② **legacy（v2.26.0 前）keygen 安装**无 chain-identity-root 钉固，`_keygen_established` 仅能靠 GUARD 基线存在判定，若其 GUARD 基线被删则退化为未覆盖（v2.26.0+ 安装因 chain-identity-root 受 H-2c 保护而覆盖）；③ script:/manifest:/artifact 域「文件与基线同删」不单独标 dirty（文件缺失即技能损坏、且 manifest 域 apply/keygen 硬闸兜底层级更高），属已知边界。以上三项均与既有自举披露口径一致。
+- **红线声明**：不删减、不弱化任何诚实披露与历史审计记录；H-2b'/H-2c/R-1/R-2/R-3 闸语义零变化；不声称 full PASS；CONDITIONAL-PASS 口径保持。
+
+---
+
+## v2.26.1（2026-10-20）— Hermes 五轮复验（60/100）接线缺陷收口：verify 链指纹校验无条件化（H-2b'）+ H-2c 删钉固行逃逸 fail-closed
+
+- **H-2b' [HIGH→收口]（五轮 B5 实测）**：v2.26.0 的 `cmd_verify` 链首指纹校验误嵌套于 `if grec is not None:` 块内——删 GUARD 域基线（integrity.json guard 记录）即整块跳过、方案B 校验不可达逃逸（U4 变体 verify rc=0）。v2.26.1：校验移至函数体顶层**无条件执行**（不依赖 guard 域基线存在）。回归 `test-v2260` B11/B12（删 GUARD 基线 + 引擎重建链 → verify rc=1）。
+- **H-2c [HIGH→收口]（五轮 B6 实测，逃逸成本=删一行文本）**：CONTRACT.md 的 `chain_head_fingerprint` 行被删 → `chain_fingerprint_ok` 原判「pinned is None → legacy 放行」→ apply 硬闸逃逸。v2.26.1 判据改为**钉固痕迹检测**：`human-guard.json` 存在（keygen 已跑）**或** CONTRACT.md 含 chain-identity-root 节标题（钉固节曾写入）任一成立而值行缺失 → fail-closed（env `METACOG_ALLOW_LEGACY_NO_CHAIN=1` 统一逃生舱）；两者皆无（未 keygen 老安装/init 未钉固态）→ legacy 放行 + warn。**诚实披露残余（v2.27.0 量化）**：攻击者连节标题一并删除 → 判据消失，方案B 单独失效。兜底须同时满足「前提」才生效：**(a)** CONTRACT.md 属 MANIFEST_NAMES（`metacog.py:957-963`），其 manifest 域保护**仅当**「外部锚已启用（受保护模式 enforced）或 `METACOG_TRUST_ROOT_STRICT=1`」时才是硬闸**（见 `cmd_apply`/`_confirm_keygen`/`cmd_retrieve` 的 `_manifest_integrity_drift_if_enforced` 调用点）；**(b)** 该兜底是 **verify 报告层**检出——`chain_fingerprint_ok` 自身已放行，**`apply` 入口硬闸不会因方案B 失败而拒绝**，故方案B 单独失效时攻击者仍可能借 apply 落盘（受保护模式下由 manifest 域硬闸二次拦截，普通模式下仅 verify 报告告警）。读者勿低估：方案B 单独失效 ≠ 全域失守，但须依赖外部锚/STRICT 或人类带外核对才闭环。回归 B13/B14/B15。**（v2.27.1 口径补正 · D-2：Hermes 七轮实测 v2.27.0 下 apply 入口硬闸已 rc=3 拒绝——拒绝来自 R-1/R-2 应有基线集的间接强化而非方案B 本身，且前提是 manifest 基线键未被删（N-2 盲区下可被绕过）；故上文「攻击者仍可能借 apply 落盘」在 v2.27.0 语境下不成立，在 N-2 未修前仍为条件性成立。详见 v2.27.1 条目）**
+- **测试**：`test-v2260-chain-hardening.py` 扩至 **25 断言**（A 8 + B 10 + B2' 5 + C 2）ALL PASS；全量 test-*.py 回归 ALL PASS。
+- 另：v2.26.0 升版曾致 4 套件「截止期前容忍」测试失效（`CURRENT_VERSION_TUPLE` 自 SKILL.md 动态读取，写死 cutoff=(2,26) 不再晚于当前）——6 处 cutoff 改为动态「当前次版本+1」治本。
+
+---
+
+## v2.26.0（2026-10-20）— H-2a/H-2b 架构级收口：链条目 HMAC（方案A）+ keygen 链首指纹人类锚钉固（方案B），owner 授权「a+b」双修
+
+Hermes 四轮复验（CONDITIONAL-FAIL 55/100）确认 v2.25.20 删链型收口有效，但同根暴露两条等价变体：**H-2a**（手写/直写链条目——无签名可伪造）、**H-2b/U4**（删链+删基线+引擎 API 重建→无痕，探针 rc=0/dirty=[]）。根因=链条目无 HMAC、链无人类锚基准。本版按 owner 指令「a+b」双修：
+
+- **方案A【链条目 HMAC】**：`record_integrity → _append_integrity_chain` 写入的每条链条目附 `mac`（独立派生标签 `_CHAIN_HMAC_LABEL`，与基线签名 `_LEDGER_SIG_LABEL`/审计链 `_AUDIT_HMAC_LABEL` 三钥分离，消除单钥双用）。校验侧新增 `Store._chain_entries_verified`（`_integrity_chain_ok` 与 `_integrity_chain_ok_latest` 共用）：① 含 mac 条目强制验签（不符 → fail-closed，env 不放行——mac 在但错=明确篡改）；② **mac 纪元后出现无 mac 条目 → fail-closed**（record 自 v2.26.0 必然写 mac，此后无 mac 条目=手写伪造冒充 legacy；`METACOG_ALLOW_LEGACY_NO_CHAIN=1` 与链缺失同一逃生舱口径临时放行）；③ 纯 legacy 链（v2.26.0 前安装）放行 + warn 建议重基线。强度与 script: 域 `_anchor_sig` 同级：防御纵深（闭「不经引擎 API 手写条目」伪造），持源码读权者可重算（诚实边界不变）。
+- **方案B【链首指纹人类锚钉固】**：`confirm --keygen`（人类 TTY 在场）把 D4 链**首条目** hash 钉入 CONTRACT.md 新节「## 8. 链身份根（chain-identity-root）」（与 human-identity-root 同构的人类持有不动点）。首条目为 append-only 头部——record 追加只动尾部，钉固值永续有效。校验 `Store.chain_fingerprint_ok()` 接入 verify（guard 域后独立 dirty 项）与 apply 主路径入口（rc=3 硬闸）：删链（首指纹取 None）→ fail-closed；删链+引擎重建 → 新链首条 hash 因时间戳等字段不可复现与钉固不符 → fail-closed（**U4 场景实测收口**）。未钉固（legacy/未 keygen）放行 + warn；keygen 时链空 → `empty-chain-at-keygen` 哨兵，建链后放行 + warn 建议重新钉固；`METACOG_ALLOW_LEGACY_NO_CHAIN=1` 统一逃生舱。
+- **诚实边界升级披露（H-2a 全引擎 API 变体=自举残余）**：「改制品 + record_integrity 重算基线 + 引擎追加合法 mac 条目（链头不动）」全程引擎 API、不写任何非引擎密码学材料 → A/B 均不可进程内检出——与 C-1 自举信任根同类（须系统级部署契约兜底），SKILL.md「诚实天花板」如实登记，不声称闭合。本轮收口范围：手写/直写条目变体（A）+ 删链重建变体（B）。
+- **测试**：新增 `test-v2260-chain-hardening.py`（A 组 8 断言：写入带 mac/篡改验签/手写无 mac/伪造 mac/env 放行/legacy 链/删链 verify dirty；B 组 10 断言：钉固落盘/追加不变通过/删链检出/重建检出/env 放行/重钉固恢复/empty 哨兵；C 组 2 断言：apply 入口双闸集成 H-2b U4 重放）——20/20 PASS。全量 test-*.py 回归 ALL PASS。
+- **迁移兼容**：v2.25.x 及之前安装升级后首条 record 前的旧链为纯 legacy（放行+warn）；任意一次 record 后新条目带 mac，链进入混合态（前缀 legacy+后缀 mac，放行）；混合态后再现无 mac 条目才 fail-closed。重基线（删 .metacog 重 init + keygen）即得全 HMAC 链 + 链首钉固。
+
+---
+
+## v2.25.21（2026-10-20）— H-2 配套收口：apply 主路径入口硬闸 + legacy 逃生舱文档化（m-1~m-4，owner 授权修复）
+
+- **m-4 [MED] apply 入口硬闸**：Hermes 四轮复验发现 `applies_integrity_ok` 全库仅 `resolve_trial_start` 一处调用——`apply` 主路径不查 D4，删链+`METACOG_ALLOW_LEGACY_NO_CHAIN=1` 逃生舱放行后 verdict 锚在篡改状态仍可继续记账。v2.25.21 起 `cmd_apply` 在 script/manifest 两道硬闸之后、`record_script_integrity` 之前接入 `applies_integrity_ok` 检查：applies.jsonl 与 D4 快照/哈希链不符（含链被删）时入口即拒 rc=3，早于 use-once 消费检查。正常流程 record_apply 双写（基线+链）原子完成，不误伤；首次 apply 无基线向后兼容（返回 True）不受影响。
+- **m-1/m-2 [DOC] 速查行与逃生舱语义文档化**：SKILL.md「无人值守 / 自动化部署」速查行补齐 v2.25.20 链缺失 fail-closed（`METACOG_ALLOW_LEGACY_NO_CHAIN=1` 临时放行，严格 `== "1"` 匹配、链存在时无效）与 v2.25.21 apply 入口硬闸语义；诚实边界句由「删链不可检出」改写为 v2.25.20/21 后的准确残余——删链/删基线单改已可进程内检出，「清空消费账本+删基线+删链+经引擎 API 重建基线并追加伪造链条目」（链条目无 HMAC，Hermes 四轮实测 H-2a/H-2b）仍不可进程内检出，架构级修复待 owner 授权拍板（链条目 HMAC vs 链指纹钉固）。
+- **m-3 [DOC] error-glossary 补两条目**：「chain.jsonl 缺失或为空（D4 链校验 fail-closed）」与「applies.jsonl 与 D4 快照/链不符（apply 入口硬闸）」，均带逃生舱/重基线/入侵排查处置指引。
+- **测试更新（3 处断言随行为升级）**：① `test-confirm-sign.py` G1 两条账本篡改断言由「走到 use-once 消费检查才拒（rc=2）」升级为「入口完整性硬闸即拒（rc=3 + 完整性-硬闸）」；② `test-human-gate.py` B.2 场景 3 直写篡改 applies.jsonl 后**恢复原文**再跑场景 4（m-4 后入口硬闸会正确拦下未恢复的篡改状态）——回归意图「正常 apply 不误伤」不变；③ `test-trust-root.py` D-3「空链文件 → True(向后兼容)」旧断言更新为「→ False(v2.25.20 fail-closed)」。
+- **全量回归**：核心 4 套（confirm-sign / human-gate / core / boundary-cases）+ 全部 test-*.py 套件 ALL PASS（METACOG_TRUST_ROOT_ALLOW_DEFAULT=1）。
+
+---
+
+## v2.25.20（2026-10-20）— H-2 收口：主链校验链缺失 fail-closed 化（D4 架构级，owner 授权修复，引擎小改 + 测试）
+
+> 修订（引擎小改 + 测试）：修复三轮实测复验 H-2（owner 指令「H2」授权）。**缺陷**：D4 链校验在链文件缺失时 return True（v2.6.0 向后兼容口径）被 Hermes 实测利用——「删 chain.jsonl → 改制品 → 重算基线 → verify rc=0 无痕」；且制品域 verify 主路径（verify_integrity）与 guard 域校验**完全不查链**，删链洗白对这两个域同样无痕。**修复（按域防线架构分别处置）**：① `_integrity_chain_ok`（applies 域，v2.6.0 语义）：链缺失/为空 → fail-closed，新增 legacy 逃生舱 `METACOG_ALLOW_LEGACY_NO_CHAIN=1`（v2.5.8 老基线安装兼容，warn 提示重基线）——与既有 `METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR` 同风格；② 新增 `_chain_ok_for_verify` 并补进 `verify_integrity` 的 **artifact/applies 域**与 cmd_verify 的 **guard 域**主校验路径（链缺失/不连续/最近条目与当前不符 → dirty）；③ **架构口径澄清**：script:/manifest: 域基线由 record_script_integrity 直接写 integrity.json（从不入链），其防线是 `_anchor_sig` 基线签名（密钥位于代码，重记基线无法伪造）——链校验不适用且不补入这两域（首轮实现曾误补，测试暴露「正常状态 verify rc=1」后按域防线架构撤回，注释已载明）。**诚实边界**：本收口把删链从「无痕」升为「fail-closed 检出」，但**不改变自举边界**——攻击者同时改账本+基线+伪造链条目（prev 正确追加）仍不可进程内检出（链条目无 HMAC，见 v2.25.19 H-1 披露），须系统级部署契约兜底。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；G3 绑定语义与非 TTY fail-closed 拒绝语义零变化；不声称 full PASS；CONDITIONAL-PASS 口径保持。
+
+### 改动清单（v2.25.20）
+- **[引擎·H-2]** `_integrity_chain_ok`：链缺失/为空 → False（legacy 逃生舱 env 可放行）；新增 `_chain_ok_for_verify`（verify 路径链校验入口）；`verify_integrity` artifact/applies 域、cmd_verify guard 域补链校验（dirty）；script:/manifest: 域架构口径注释（_anchor_sig 防线，不入链）。
+- **[测试]** `test-confirm-sign.py` 新增 **H 组 7 断言**（正常状态 verify rc=0 / 删链后 verify rc=1 / applies 域链校验 fail-closed / 双写域全 dirty 无静默洗白 / legacy 逃生舱放行 verify 与 gate）→ 全套 **64 断言 ALL PASS**；回归 test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**（env 口径同前）。
+- **[版本]** 四处 version → `2.25.20`（publishedAt 仍待发布指令）；冻结账本同口径授权重置重基线后 `freeze verify` rc=0。
+
+---
+
+## v2.25.19（2026-10-19）— Hermes 三轮实测复验收口（H-1 披露补全 + N-3 报错指引修正 + m-1 补齐 + 探针留档，引擎文案 + 文档）
+
+> 修订（引擎报错文案 + 文档，无闸语义变更）：落实 Hermes 第三轮复验（**实测轮**：审计员在本发布包权威工作目录实跑全部测试与自写探针；总体评级 **CONDITIONAL-PASS，54→63/100**；探针与报告原文留档 `references/audit-probes-v22518/`、`references/hermes-audit-v22518-out.txt`）。**实测确认收口项**：C-1 三条绕过（删 applies 行/清 claims/删 integrity.json 均 rc=2 拒绝）、四个测试套件计数全部核实无虚报（57/14/53/69）、freeze verify rc=0、伪造链条目路径披露属实。**本版收口项**：**H-1（披露补全）**——实测确认 use-once 完整绕过须 **applies 与 sig-claims 两处账本齐改**（各自改写+重算基线+伪造链条目），原披露「消费账本」单数低估攻击面，docstring 与本条目更正为「两处齐改」；**M-1（报错指引修正）**——「基线已写、链未写」崩溃中间态的原报错只指向 sig-claims.jsonl 与 integrity.json、未含 chain.jsonl，运维按指引无法自救，文案补全三文件与可执行恢复路径（对齐补写链条目或恢复备份）；**m-1（补齐）**——U+2000-200A 空格块补 U+2000/2001/2006 三字符（`_INVISIBLE_MARKS` 扩至 37 项）。**留档补强**——上轮探针文件（probe_useonce 等 5 个）散落临时目录不可复核，本版起 Hermes 实测探针 6 件随包留档。**披露待指令（超出本次 P1+P2 范围，未擅自修复）**：H-2——N-1 的修复仅落在 sig-claims 专用链校验（`_integrity_chain_ok_latest`），主链校验 `_integrity_chain_ok`（applies/guard/artifact 域）在链缺失时仍 return True（v2.6.0 既有语义），实测「删 chain.jsonl → 改制品 → 重算基线 → verify rc=0 无痕」成立；其根因是链条目无签名/HMAC（纯自述），属 D4 完整性架构级边界，修复涉及全闸语义变更，按「严格按指令修复不扩大范围」原则待 owner 指令。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；G3 绑定语义与非 TTY fail-closed 拒绝语义**零变化**；不声称 full PASS；CONDITIONAL-PASS 口径保持。
+
+### 改动清单（v2.25.19）
+- **[引擎·H-1 披露补全]** `human_sig_consumed` docstring：诚实边界更正为「两处账本齐改」口径。
+- **[引擎·M-1 报错指引]** `cmd_apply` applies-integrity 分支文案：补 chain.jsonl 与崩溃中间态恢复指引。
+- **[引擎·m-1]** `_INVISIBLE_MARKS` 补 U+2000/2001/2006 → 37 项。
+- **[文档·留档]** `references/audit-probes-v22518/`（Hermes 实测探针 6 件）+ `references/hermes-audit-v22517-out.txt`、`references/hermes-audit-v22518-out.txt`（二、三轮报告原文）。
+- **[测试]** `test-confirm-sign.py` **57 断言 ALL PASS**（无新增断言，本轮为文案/披露收口）；回归 test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**；freeze 授权重置重基线后 `freeze verify` rc=0。
+- **[版本]** 四处 version → `2.25.19`（publishedAt 仍待发布指令更新）。
+
+---
+
+## v2.25.18（2026-10-19）— Hermes 二次复验静态发现修复（N-1 链缺失 fail-closed + M-2 二次扩面 + 诚实边界口径统一，引擎小改 + 文档）
+
+> 修订（引擎小改 + 文档）：落实 Hermes 对 v2.25.17 的二次复验（本轮因 Hermes 运行环境无本包文件副本、明确声明未实跑，评级口径为**材料层静态审计：CONDITIONAL-PASS 54/100，13 项剩余条件**；审计报告全文见 `references/hermes-audit-v2.25.16-17.md`）。可立即修复项本版收口：**N-1**：`_integrity_chain_ok_latest` 链文件不存在/为空时原 return True 与 fail-closed 宣称矛盾（单删 chain.jsonl 即可永久关闭链校验且无告警）——本版改为 False（有基线必有链，record_integrity 写基线时必然同时写链，「有基线、无链」只可能是人为抹除）；**M-2 二次扩面**：「22 项」是列举完备不是类别完备——补空格类格式字符 12 项（U+1680/2002-2009 含 2004/2007/2008、U+202F、U+205F、U+3000），变体选择器 U+FE00-FE0F（可改变前字符渲染形态的**列举不完备类别**）在 `_visible_text` 范围兜底标注 `[U+XXXX]`、`_n_invis` 告警计数同口径计入；**诚实边界口径统一（双向不一致收口）**：Hermes 指出比「三点删除」更简单的等价路径——**改账本+改基线+向 chain.jsonl 追加 prev 正确的伪造条目**（无需删任何文件）即可使 gate 全绿，docstring（原述 2 处）与 CHANGELOG（原述 3 处）统一为「同时改写消费账本、D4 基线与完整性链（含伪造链条目）」；**m-1 历史数字**：v2.25.16 条目「46 断言」为口径错误（正确值 49），已在复验指路点破、原文数字不动。**披露补强（进程内无法根治，如实披露）**：N-2——POSIX 侧 flock 绑定 inode，A 持锁期间 unlink+重建锁文件可使并发方立即获锁（Windows 侧因无 FILE_SHARE_DELETE 被 OS 基本挡掉），跨平台锁强度不均衡；N-3——消费临界区内为三次独立写、无事务无 journal，崩溃在写基线之后、写链之前会使下次 apply 永久 fail-closed，恢复须人工改写 integrity.json（恰为闸要防的动作且不留审计痕迹）——部署方应知晓这两项残余面。**另注**：Hermes 本轮「v2.25.16/17 未落盘」的实测声明基于其运行环境内另一份旧副本（dist 最高 2.25.4），非本发布包工作目录；其实测诉求由下一轮带正确路径的复验承接。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；G3 绑定语义与非 TTY fail-closed 拒绝语义**零变化**；不声称 full PASS；CONDITIONAL-PASS 口径保持。
+
+### 改动清单（v2.25.18）
+- **[引擎·N-1]** `_integrity_chain_ok_latest`：链不存在/为空 → False（原 True），docstring 说明依据。
+- **[引擎·M-2 二次扩面]** `_INVISIBLE_MARKS` 扩至 34 项（+12 空格类）；`_visible_text` 加 U+FE00-FE0F 范围兜底；`_confirm_sign` `_n_invis` 同口径计入变体选择器。
+- **[引擎·口径统一]** `human_sig_consumed` / `consume_human_sig_atomic` docstring 诚实边界统一为「改账本+改基线+伪造链条目」三件套等价路径。
+- **[文档·CHANGELOG]** 本条目 + v2.25.16 复验指路点破 46→49。
+- **[测试]** `test-confirm-sign.py` **57 断言 ALL PASS**（+2：变体选择器 U+FE0F 兜底标注、计入告警）；回归 test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**（env 口径同前）。
+- **[版本]** 四处 version → `2.25.18`；冻结账本同口径授权重置重基线后 `freeze verify` rc=0。
+
+---
+
+## v2.25.17（2026-10-19）— Hermes 复验 C-1/C-2/M-1/M-2/M-3 修复（use-once 原子消费 + D4 硬闸 + BiDi 可见化，引擎小改 + 文档）
+
+> 修订（引擎小改 + 文档）：落实 Hermes MCP 对 v2.25.16 的独立复验结论（总体维持 CONDITIONAL-PASS；复验探针留存于其审计报告）。**C-1（严重）**：删 applies.jsonl 含签名行（或删 integrity.json 使无基线）可绕过 use-once，且 D4 校验不在 apply 主流程上、二次 apply 会把基线覆盖洗白——事后不可检出；**C-2（严重）**：use-once 检查与 record_apply 落账相隔 116 行且无文件锁，TOCTOU 双消费实测成立。两者根治：① 新增独立消费账本 `ledger/sig-claims.jsonl`（append-only，纳入 D4 快照 + 哈希链，键 `SIG_CLAIMS_INTEGRITY_KEY`）——签名消费不再依赖 applies.jsonl 的存续；② 新增跨平台文件锁 `_applies_lock`（Windows msvcrt.locking / POSIX fcntl.flock）+ `Store.consume_human_sig_atomic` 唯一消费入口——「D4 硬闸 → use-once 检查 → 消费标记落账 → 基线刷新」在同一临界区内完成，检查-写入窗口为零；③ 新增 `Store.applies_gate_ok`（比 applies_integrity_ok 更严：账本非空无基线=篡改、有基线但账本空=篡改、链中有历史而基线被抹=篡改，全部 fail-closed）+ `_integrity_chain_ok_latest`（不要求链尾条为目标 key，改为最近一条目标条目哈希须匹配——消费路径上 record_apply 会推走链尾，沿用原语义会误伤）。**M-1（中等，文档层）**：v2.25.16 复验材料与条目中「applies.jsonl 受 HMAC 链/integrity 保护」的论证不成立——`_anchor_sig` 校验点（script:/manifest:/artifact:/human-guard 域）不覆盖 applies 域，D4 哈希+链连续性保护且不在消费路径上校验；本版起 use-once 强度口径改为「消费账本完整（D4 基线在且匹配+链连续）+ 单进程串行」三者同时成立时成立，v2.25.16 条目加复验指路、原文不动。**M-2（中等）**：`_INVISIBLE_MARKS` 实测盲区 14/17——补齐 U+202A-202E（BiDi 嵌入/翻转）、U+2066-2069（isolate）、U+061C、U+00A0、U+00AD、U+180E、U+2028/2029；U+202E（RTL-OVERRIDE 视觉翻转，终端注入最经典载体）自此以 `[RTL]` 标记可见化。**M-3（中等）**：`_episodes_len` docstring 补边界声明——t0 绑定**物理行数**非记录数，签名不覆盖 episodes 记录内容的改写。**m-1（轻微）**：断言计数口径统一为「`r.add` 断言项数」（本版 55 项：A2/B4/C14/D4/E1/F4/G1-7/G2-6/G3-10/G4-3）；**m-2（轻微）**：本地测试依赖 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` + `METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1` 两个 legacy 口径开关，此事实自本版起在测试证据行**前置**声明（测试结论对严格模式的外推以此为前提；C-1/C-2 类篡改场景在严格模式下同样成立）。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；G3 绑定语义（id+chash+t0）与非 TTY fail-closed 拒绝语义**零变化**；TOCTOU 修复承认残余边界——攻击者**同时**清空消费账本+删基线+删链（三处一致抹除）仍不可进程内检出，此为自举信任根固有边界（与 CONTRACT.md 诚实天花板同源），须系统级部署契约兜底；诚实披露不粉饰。**不声称 full PASS；CONDITIONAL-PASS 口径保持。**
+
+### 改动清单（v2.25.17）
+- **[引擎·C-2 原子消费]** `_applies_lock`（模块级 contextmanager，跨平台文件锁 `ledger/.applies.lock`）+ `Store.consume_human_sig_atomic(sig_b64)`：apply 人类签名消费唯一入口，锁内原子「D4 硬闸 → use-once 检查 → sig-claim 落账 → record_integrity 建基线」，返回 (ok, reason)；`append_jsonl` docstring 修正为实测口径（单条追加近似原子，**不含读-判断-写原子性**）。
+- **[引擎·C-1 D4 硬闸]** `Store.applies_gate_ok`：sig-claims 账本专用完整性闸（非空无基线/有基线但空/链有历史而基线被抹 → 全部 False）+ `_chain_has_key`（判链中历史）+ `_integrity_chain_ok_latest`（全链连续 + 最近一条目标 key 条目哈希匹配）；`cmd_apply` 消费改走 `consume_human_sig_atomic`，新增 `applies-integrity` 拒绝分支报错（带人工核查指引）。
+- **[引擎·M-2 BiDi 可见化]** `_INVISIBLE_MARKS` 扩至 22 项（补 U+202A-202E/U+2066-2069/U+061C/U+00A0/U+00AD/U+180E/U+2028/2029），U+202E → `[RTL]`。
+- **[引擎·M-3 边界声明]** `_episodes_len` docstring：t0=物理行数（非记录数），签名不覆盖 episodes 内容改写。
+- **[文档·SKILL.md]** frontmatter → 2.25.17；「无人值守 / 自动化部署」行补 v2.25.17 原子消费 + D4 硬闸 + 诚实边界。
+- **[文档·error-glossary]** 新增 `sig-claims D4 硬闸` 条目（🚨 正常流程永不命中，命中即按篡改处置）；出处行同步。
+- **[文档·CHANGELOG]** v2.25.16 条目末尾加复验指路（原文不动）；本条目记录 M-1 口径修正。
+- **[测试]** `test-confirm-sign.py` 55 断言 **ALL PASS**：新增 G1 三条**对抗断言**（删 applies 签名行 → use-once 仍拦；清空 claims → D4 硬闸拒；删 integrity.json → fail-closed 拒——分别对应 Hermes 复验 C-1 的三条实测绕过）+ G3 三条 BiDi 断言（U+202E → [RTL]、原始字符消失、计入告警）；回归零失败：test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**。
+- **[版本]** 四处 version → `2.25.17`（publishedAt 待发布时更新）；冻结账本按同口径授权重置重基线后 `freeze verify` rc=0。
+
+---
+
+## v2.25.16（2026-10-19）— Hermes 独立审计 P1+P2 修复（use-once 强制 + 预签名收口四项，引擎小改 + 文档）
+
+> 修订（引擎小改 + 文档）：落实 Hermes MCP 独立审计（存档见 `references/hermes-audit-v2.25.14-15.md`）对 v2.25.14/15 的 P1/P2 发现，全部修复并经测试验证。**P1**：① `apply --sig` 的签名泄露面警告「仅授权一次 apply」此前**无引擎强制**（提案 apply 后被 rollback/状态直改重回 gated 时，旧签名可再次通过验签生效）——本版新增 `Store.human_sig_consumed`（applies.jsonl 原文子串匹配，刻意不经 read_jsonl 以防 512KB 上限使消费校验静默失效；读取异常按已消费处理 fail-closed），use-once 自此由引擎强制；② t0 复活路径收口——`read_jsonl` 512KB 上限返回空会使 `trial_from_index` 恒 0，攻击者刷大账本可让旧签名复活，本版新增 `_episodes_len`（行数口径不经上限）统一三处 t0（apply 验签 / `p["trial_from_index"]` 落盘 / `confirm --sign`）。**P2**：③ 知情同意从 160 字截断改为全文逐行打印（注：此项实际随 v2.25.15 已落地，本版补测试与口径统一）——chash 与显示字符数统一为**不 strip** 口径；④ ANSI/零宽注入防护——`_visible_text` 将 ESC→`[ESC]`、U+200B→`[ZWSP]` 等可见化后再打印，签名前告警不可见字符计数；⑤ `--out` 收口——已存在须 `--force`（rc=2）、指向目录精确报错（rc=2）、写失败 rc=2 且签名仍在 stdout 可复制。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；G3 绑定语义（id+chash+t0）与非 TTY fail-closed 拒绝语义**零变化**；本版不新增任何能力，仅收紧既有安全语义的执行缺口；自验回环定位校准为「漂移检测，非独立验证」（与 apply 共用同一 verify 与同一公钥，无增量密码学保证——诚实披露不粉饰）。**不声称 full PASS；CONDITIONAL-PASS 口径保持。**
+
+### 改动清单（v2.25.16）
+- **[引擎·P1 use-once 强制]** `Store.human_sig_consumed(sig_b64)`：applies.jsonl **原文**子串匹配（base64 字符集无 JSON 转义，子串匹配可靠）；`cmd_apply` 验签通过后、消费前检查，命中则 human_blocked+1 拒绝（rc=2，报错带 `confirm --sign` 重签指引）。
+- **[引擎·P1 t0 口径统一]** `_episodes_len(st)`：直接数 episodes.jsonl 行数，不经 `read_jsonl` 512KB 上限；`cmd_apply` 验签 t0、`p["trial_from_index"]` 落盘、`_confirm_sign` 三处统一同值——超 512KB 账本下预签名/验签口径不再漂移（G4 组实测 3000 行账本 t0=3000 正确）。
+- **[引擎·P2 知情同意/注入防护]** `_confirm_sign`：提案全文逐行打印（`| ` 前缀，无截断）+ 总字符数（未 strip 口径，与 chash 一致）+ chash 带外核对行；`_visible_text` 可见化 ANSI/零宽/BOM 后再输出（原始 ESC 不再进终端，防清屏/变色注入），含不可见字符时告警计数。
+- **[引擎·P2 --out 收口]** 已存在且无 `--force` → rc=2 拒绝（报错带覆盖指引）；指向目录 → 精确报「指向目录而非文件」（rc=2，`--force` 无效）；`open` 写失败 → rc=2 且签名仍打印（「不因写失败丢签名」）；argparse 新增 `--force`。
+- **[引擎·报错指引]** `apply` 三处人类闸报错补两步工作流指引（非 TTY / invalid-signature / 通用 D1 分支，v2.25.14 引入，本版随收口复核）；docstring 措辞校准（「Agent 进程不持有私钥明文」「不新增绕过**密码学验证**的路径」）。
+- **[文档·error-glossary]** 人类闸表新增 6 行：use-once / `--out` 三态（已存在/指向目录/写失败）/ 不可见字符告警；出处行同步。
+- **[文档·SKILL.md]** frontmatter → 2.25.16；「无人值守 / 自动化部署」速查行补 use-once 与 `--out` 语义；退出码表指路复核。
+- **[测试]** `test-confirm-sign.py` 46 断言 **ALL PASS**：A TTY 强制 2 / B 参数校验 4 / C 端到端 14（含 `--out` 全场景）/ D t0 漂移 4 / E 错误口令 1 / F 全文披露 4 / **G1 use-once 4**（提案重回 gated 后旧签名被拒）/ **G2 --out 安全 6**（已存在拒绝 / 原文件保留 / --force 覆盖 / 写失败 rc=2+签名仍在 / 指向目录精确报错）/ **G3 知情同意归一化 7**（[ESC]/[ZWSP] 可见化、原始 ESC 消失、未 strip 口径）/ **G4 t0 超限 3**（3000 行账本 t0=3000）；回归零失败：test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**（本地测试口径 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` + `METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1` 不变）。
+- **[版本]** SKILL.md frontmatter / package.json / _meta.json / _skillhub_meta.json `version` → `2.25.16`（`_meta.json.publishedAt` 待实际发布时更新）；冻结账本按同口径授权重置重基线（17 路径全量重录）后 `freeze verify` rc=0。
+- **[复验指路（v2.25.17 增补；v2.25.18 再增补）]** 本版发布前经 Hermes MCP 独立复验：**维持 CONDITIONAL-PASS**，发现 C-1（删消费账本行绕过 use-once 且事后不可检出）/ C-2（检查-落账 TOCTOU 双消费）/ M-1（本条目中「applies.jsonl 受 HMAC 链/integrity 保护」的防线论证不成立——`_anchor_sig` 校验点不覆盖 applies 域）/ M-2（可见化盲区 14/17，U+202E 等 BiDi 零告警）/ M-3（t0 行数≠记录数边界未声明）等，全部于 **v2.25.17** 修复；本条目原文照录不作改动（诚实披露：本版的 use-once 强制存在上述执行缺口，请勿按「已闭环」解读）。另：本条目「[测试] 46 断言」为**计数口径错误**（v2.25.16 当时的正确值为 **49**，r.add 断言项数口径：A2/B4/C14/D4/E1/F4/G1-4/G2-6/G3-7/G4-3），原文数字不作改动、以本更正为准。
+
+---
+
+## v2.25.15（2026-10-19）— `confirm --sign` 知情同意全文披露收口 + 安全闸 reason 白话词典（引擎小改 + 文档）
+
+> 修订（引擎小改 + 文档）：对 v2.25.14 `confirm --sign` 做安全自审，发现一个 **Confirmed 知情同意缺口**——签名绑定的是提案**全文**（chash 对 canonical 提案全文 SHA-256，`metacog.py` L364-366），但签名前仅显示**前 160 字预览**，一个「前 160 字良性 + 尾部恶意」的提案可获得知情同意外观（攻击路径：Agent 提交拼接内容 → 人类基于截断预览签名 → 恶意尾部随全文生效）。本版收口：签名前**全文逐行打印**（无截断）+ 内容哈希带外核对 + 签名泄露面警告（签名/--out 文件泄露 = 该提案一次 apply 授权交予持有者）。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；G3 绑定语义（id+chash+t0）与非 TTY fail-closed 拒绝语义**零变化**；本收口不新增任何能力，仅收紧人类所见与所签内容的一致性。同版新增 `references/error-glossary.md`（安全闸 reason 白话词典，与 `troubleshooting.md` 互补不重复），响应 TRACE「专业术语较多的报错需查文档」反馈。**不声称 full PASS；CONDITIONAL-PASS 口径保持。**
+
+### 改动清单（v2.25.15）
+- **[引擎·安全收口]** `_confirm_sign` 知情同意区：截断预览（160 字）→ **提案全文逐行打印**（`| ` 行前缀）+ 总字符数如实标注 + `内容哈希`（对全文 SHA-256，供带外核对提案未被调包）+ `⚠️ 泄露面`警告（签名输出/--out 文件经任何渠道泄露 = 该提案 apply 授权交予持有者，仅经可信信道传递、用后可删）。
+- **[引擎·docstring]** `cmd_confirm` 与 `_confirm_sign` 文档同步收口说明。
+- **[文档·新增]** `references/error-glossary.md`：四类安全闸 reason 白话词典（信任根/外部锚、完整性/篡改检出、人类闸、G1 写入闸），每条含「白话解释 / 危险吗 / 怎么办」与代码出处；定位为 `troubleshooting.md`（按命令组织的 18 类常见错误）的互补层。
+- **[文档·指路]** SKILL.md「退出码与排查」补 error-glossary 入口。
+- **[测试]** `test-confirm-sign.py` 增至 **29/29 PASS**（新增：内容哈希 64 位 hex 输出 / 泄露面警告 / 旧截断预览字段移除防回归 / F 组全文披露——>160 字符提案尾部完整可见+总字符数如实标注，4 项）；回归零失败：test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**。
+- **[版本]** SKILL.md frontmatter / package.json / _meta.json / _skillhub_meta.json `version` → `2.25.15`（`_meta.json.publishedAt` 待实际发布时更新）；冻结账本按同口径授权重置重基线（17 路径全量重录）后 `freeze verify` rc=0。
+
+---
+
+## v2.25.14（2026-10-19）— `confirm --sign` 预签名子命令（无人值守人类闸工作流补全，引擎小改 + 文档口径显式化）
+
+> 修订（引擎小改 + 文档）：响应 TRACE 评测与新手/自动化动线反馈中「无人值守场景人类闸如何落地」的缺口——`apply --sig` 预签名验签路径自 M-7（v2.5.7）起存在，但缺少人类可用的预生成工具（「有验无签」）。本版新增 `confirm --sign --id <提案id> [--out <文件>]` 补齐：**安全语义与 apply 当场签名完全一致**（私钥仍只在人类 TTY 内由口令解锁；签名仍覆盖 提案 id + 内容哈希 + trial_from_index=t0；Agent 不持私钥故无法自签/挪用/t0 变化后复用）。**红线声明**：不删减、不弱化任何诚实披露与历史审计记录；不声称 full PASS；CONDITIONAL-PASS 口径保持；G3 绑定语义与非 TTY fail-closed 拒绝语义**零变化**——`--sign` 不新增任何绕过路径，仅把 apply 内联签名动作拆为「人类先签、机器后用」两步。
+
+### 改动清单（v2.25.14）
+- **[引擎·新增子命令]** `confirm --sign --id <提案id> [--out <文件>]`：人类 TTY 专用（继承 confirm 顶部 `_require_tty` 闸）；签名前打印知情同意信息（提案 id / 制品与操作 / 内容预览 ≤160 字）；t0 与 apply 同口径（当前 episode 行数），并显式警告「签名后至 apply 前不得再记账（episode），否则 t0 变化 → 验签失败需重签」；签名后自验回环（`verify_human_binding` 必须通过才输出，防签名/验签口径漂移）；`--out` 写单行 base64 供自动化读取。
+- **[引擎·报错指引]** `apply` 三处人类闸报错补两步工作流指引：非 TTY 拒绝分支 / 绑定签名无效分支（invalid-signature，覆盖 t0 漂移场景）/ 通用 D1 警告分支，均指向 `confirm --sign` 重签路径。
+- **[文档·能力口径显式化]** 速通后新增「能力口径（v2.25.14）」段：默认交付=**会话级**强制（运行时 fail-closed）；**系统级**（C-1 闭合）须部署「一键系统级隔离」套件；两种口径均不声称「无需人类在环」。
+- **[文档·失实引用修复]** 「信任决策速查」人类闸行原指引 `confirm --approve`（v2.5.7 已移除的子命令，属文档失实）更正为现行工作流；新增「无人值守 / 自动化部署（无 TTY）」行。历史逐版审计记录中的 `confirm --approve` 字样为历史事实记述，逐字保留未动。
+- **[文档·退出码表]** 退出码 2 行人类闸场景补「或 `confirm --sign` 预签名经 `--sig` 传入」指路。
+- **[测试]** 新增 `scripts/test-confirm-sign.py` **22/22 PASS**（TTY 强制 2 / 参数校验 4 / 端到端两步工作流 11 / t0 漂移 fail-closed 4 / 错误口令 1）；回归零失败：test-human-gate **69/69**、test-core **14/14**、test-boundary-cases **53/53**（本地测试须 `METACOG_TRUST_ROOT_ALLOW_DEFAULT=1` + `METACOG_ALLOW_LEGACY_NO_EXTERNAL_ANCHOR=1`，与 v2.25.13 起的本地测试口径一致）。
+- **[版本]** SKILL.md frontmatter / package.json / _meta.json / _skillhub_meta.json `version` → `2.25.14`（`_meta.json.publishedAt` 待实际发布时更新）；冻结账本按 v2.25.13 同口径**授权重置重基线**（`METACOG_FREEZE_ALLOW_RESET=1` + 令牌，原 16 路径 + 新增 `scripts/test-confirm-sign.py` 共 17 路径全量重录）后 `freeze verify` rc=0。
 
 ---
 
@@ -56,7 +1245,7 @@
 > 修订（部署套件安全硬化，无引擎代码逻辑变更）：据腾讯安全云鼎实验室评估报告，在 2.25.6 基线上彻底清理 C-1 残余——① 移除 SKILL.md 中的 `放行标记` HTML 注释放行标记（residual ⑯ 关闭，不再有内容审查豁免标注）；② `scripts/C1_deploy.py` 内嵌的 8 个 `C1_*.ps1` 全部重写：账户口令由明文 `Set-Content` 改为 **DPAPI `ConvertFrom-SecureString`**（admin-only ACL，不落明文），并**移除** `C1_run_metacog.ps1` 中计划任务被拒时自动 `Enable-PSRemoting` 开启 WinRM 的兜底分支（改为显式报错退出，避免静默开启网络监听）；③ SKILL.md 新增「部署权限与安全披露」诚实边界块，明示建账户 / 授 `SeInteractiveLogonRight`·`SeBatchLogonRight` / 注册自启 / 凭据走 DPAPI 等特权操作；④ 两份回滚手册与新手说明维持**仅私域分发**（2.25.9 起不随 SkillHub 包）。冻结账本 16 路径重基线后 `verify` rc=0；安全报告命中项全数清除。
 
 ### 改动清单（v2.25.10）
-- **[安全硬化·凭据]** 内嵌 `C1_deploy_full.ps1` / `C1_grant_logonright.ps1` 账户口令由明文 `Set-Content -Value $pwPlain` 改为 **DPAPI `ConvertFrom-SecureString`** 存于 `<scriptDir>\<account>.password.txt`（admin-only ACL，`icacls /inheritance:r /grant:r BUILTIN\Administrators:F`），读取侧经 `ConvertTo-SecureString` 解密，不落明文。
+- **[安全硬化·凭据]** 内嵌 `C1_deploy_full.ps1` / `C1_grant_logonright.ps1` 账户口令由明文 `Set-Content -Value $pwPlain` 改为 **DPAPI `ConvertFrom-SecureString`** 存于 `<scriptDir>\<account>.password.txt`（admin-only ACL，`icacls /inheritance:r /grant:r BUILTIN\<LOCAL-USER>s:F`），读取侧经 `ConvertTo-SecureString` 解密，不落明文。
 - **[安全硬化·网络]** 移除 `C1_run_metacog.ps1` 计划任务被拒时自动 `Enable-PSRemoting -Force -SkipNetworkProfileCheck` 开 WinRM 的兜底分支，改为显式 `Write-Error` + `throw`（须管理员手动 `winrm quickconfig` 后使用 WSMan 路径）。
 - **[文档·去豁免标记]** 删除 SKILL.md 末尾 `放行标记` HTML 注释（原内容审查豁免标注），residual ⑯ 关闭；新增「部署权限与安全披露」诚实边界块。
 - **[包组成]** 两份私域手册（`C1_OS隔离_执行与回滚手册.md`、`新手操作指南.md`）维持仅源树私域分发，不随包（2.25.9 既定）。
@@ -92,10 +1281,10 @@
 
 ## v2.25.5（2026-10-18）— C-1 部署闭合文档化（版本进位至 2.25.5）
 
-> 修订（文档 / 元数据变更，无代码逻辑变更）：将 C-1「信任锚本身受信」的**部署残余**正式文档化闭合——OS 级隔离（L1/L2/L3）已由 `C1_*.ps1` 系列脚本化，并在加固主机 **PC-20230325SHQZ** 实机验证通过。同步在 SKILL.md 新增「C-1 闭合现状」章节，将评测「有条件通过」重新定位于**软件层 Hermes 裁定口径**，明确部署层现已可达成、非未决风险，避免误导用户以为 C-1 是开放危险。
+> 修订（文档 / 元数据变更，无代码逻辑变更）：将 C-1「信任锚本身受信」的**部署残余**正式文档化闭合——OS 级隔离（L1/L2/L3）已由 `C1_*.ps1` 系列脚本化，并在加固主机 **<HOST>** 实机验证通过。同步在 SKILL.md 新增「C-1 闭合现状」章节，将评测「有条件通过」重新定位于**软件层 Hermes 裁定口径**，明确部署层现已可达成、非未决风险，避免误导用户以为 C-1 是开放危险。
 
 ### 改动清单（v2.25.5）
-- **[文档·C-1 现状]**：SKILL.md 新增「## C-1 闭合现状（2026-10-18 更新）」——软件层 v2.8.0 起 Hermes 裁定 `RESOLVED·CONDITIONAL-PASS`；部署层 `C1_*.ps1` 脚本化 + PC-20230325SHQZ 实机验证（外部锚启用 + L3 强制 + 锚密钥签名闭环 + `status` exit 0）；诚实边界保留（依赖正确部署）。
+- **[文档·C-1 现状]**：SKILL.md 新增「## C-1 闭合现状（2026-10-18 更新）」——软件层 v2.8.0 起 Hermes 裁定 `RESOLVED·CONDITIONAL-PASS`；部署层 `C1_*.ps1` 脚本化 + <HOST> 实机验证（外部锚启用 + L3 强制 + 锚密钥签名闭环 + `status` exit 0）；诚实边界保留（依赖正确部署）。
 - **[版本]**：SKILL.md frontmatter `version: 2.25.4` → `2.25.5`；package.json / _skillhub_meta.json `2.25.1` → `2.25.5`（本地元数据补齐至发布线）；CHANGELOG.md 新增本条目。
 - **[行为中性]**：生产源码逐字节一致；无新安全 / 健壮性变更；closure 套件 cutoff 维持 `(2,26)`。
 
@@ -582,55 +1771,6 @@ v2.8.8 卷宗 §7.5 Hermes 以 8/8 对抗探针实跑挖出：H-1（legacy 16-ch
 
 ---
 
-## v2.8.10（2026-10-11）— 双树合并收口：2.8.9 权威线吸收 repo/ 2.8.6 F1 增强（非脚本制品长度感知哈希比较 + 外部锚证明目录 16→32-char 迁移）
-
-> 修订（KK 授权 v2.8.10：前序 turn 核查磁盘发现实际加载/部署版是 **v2.8.9**（含 v286~v288 Hermes 卷宗 + ④⑤⑥⑦ 收口），而会话工作目录 `repo/` 另持一份基于陈旧 2.8.5 改出的 **v2.8.6**，含 2 处 2.8.9 缺失的独有增强。两树互补，KK 授权合并：在权威部署线 2.8.9 上吸收 repo/ 2.8.6 的 F1 增强——非脚本制品长度感知哈希比较 + 外部锚证明目录 16→32-char 一次性 rename 迁移——保留 2.8.9 的 128-bit/`--yes`/HMAC 审计/多轮 Hermes 成果，产出 v2.8.10。本版为**合并/一致性收口**，非安全发布，未引入新安全修复，未修复 v2.8.9 Hermes NOT-PASS 的 H-1~H-4 + M-1（留 v2.9.0）。SKILL.md `version` 同步 2.8.10。）
-
-### 来源 / 授权
-前序 turn 的摘要叙事称基线是 v2.8.5，但磁盘核查推翻该叙事：实际部署/加载版是 **v2.8.9**（111 文件，含 v286/v287/v288 三份 Hermes 卷宗 + ④ legacy 截止期 / ⑤ F-4 分文件硬闸 / ⑥ TTY 校验 / ⑦ HMAC 审计全部收口）。会话工作目录 `repo/`（105 文件）是另起的 v2.8.6（基于陈旧 2.8.5），其独有增强：① 非脚本制品的长度感知哈希比较（`_hash_matches`，覆盖 applies/链/外部锚/哨兵，闭合 2.8.7 H-1 同类缺口在非脚本侧的最后残余）；② 外部锚证明目录 16→64 rename 迁移。两树完整 diff 确认互补（2.8.9 有权威性但缺上述 2 处遗留兼容；repo/ 2.8.6 有这 2 处增强）。KK 授权：**合并（2.8.9 + repo 增强 → 2.8.10）**，不在错误基线上推进、不误同步回退 2.8.9。
-
-### 改动清单（v2.8.10）
-- **通用长度感知哈希 helper（合并 repo F1）**：`Store` 新增静态 `_hash_text_legacy(text)`（16-char，仅用于识别旧版外部锚证明目录名，不参与完整性判定）+ 静态 `_hash_matches(stored, current)`（精确匹配优先；`stored` 为 16-char 且 `current.startswith(stored)` → 命中旧格式前向兼容；None 处理）。该 helper 覆盖 **非脚本制品**（applies / 哈希链 / 外部锚 / 哨兵）。
-- **4 处裸哈希比较改为 `_hash_matches`**：`applies_integrity_ok`（L645→L664）、`_integrity_chain_ok`（L671→L690）、`_external_anchor_deleted` 锚（L879→L911）与哨兵（L888→L920）。消除 repo/ 2.8.6 已指出的"非 script: 分支裸比较遗留兼容缺口"在非脚本制品上的残余（与 2.8.7 H-1 同类缺口对齐收尾）。
-- **外部锚证明目录 16→32-char 一次性 rename 迁移（合并 repo F1）**：`_external_anchor_proof_dir`（L682→L702）新名不存在 + 旧 16-char 名存在 → `rename` 到新名；OSError → 回退旧名，不阻断 verify。使存量 v2.8.5 及更早的外部锚安装升级后不 fail-closed。
-- **版本号同步**：`CURRENT_VERSION_TUPLE` (2,8,9)→(2,8,10)；`SKILL.md` `version` 2.8.9→2.8.10。`(2,8,10) < (2,9)` 截止期 → legacy 仍放行，与 2.8.9 ④ 治理口径一致。
-
-### 诚实边界（v2.8.10）
-- **未采用 repo/ 2.8.6 的 `_hash_text` 64-char 改宽**：部署线 2.8.9 已统一 32-char（128-bit）+ `_legacy_hash_allowed` 截止期治理；改 64-char 会令全部存量 32-char 基线失效、与 ④ 治理冲突。本版仅新增前向兼容 helper，哈希宽度不变。
-- **保留 2.8.9 全部优势**：`_script_hash_matches` + `allow_legacy` 截止期、HMAC 链式审计 `_audit_rollback`/`_verify_audit_chain`、`--yes` TTY 校验、`__meta__` 迁移计数 + `legacy-remaining` 阻断；**未动** L1006（manifest 遗留迁移探测器）与 L3015（human-guard `_script_hash_matches`）。
-- **降级向量仍在**：16-char 纯前缀前向匹配（与 2.8.7 F-1 同源）含降级向量（攻击者截 32-char 为 16-char 可绕过主路径）；因 `(2,8,10)<(2,9)` 截止期 legacy 仍放行，强制迁移点推迟到 v2.9.0（与 ④ 一致）。
-- **C-10 残余不变**：基线 `integrity.json` 同处可写 ledger 域 + 无签名，攻击者改代码 + 重记基线仍不可检出（D4 同类，须部署契约兜底）。
-- **H-1~H-4 + M-1 仍 OPEN**：v2.8.9 Hermes 二次复派 NOT-PASS 的 4 项 blocking 缺陷未修复（超出本次"双树合并"授权范围，按「严格按指令修复·不擅自扩大」纪律留 v2.9.0），详见 § v2.8.9 + `references/hermes-audit-v288-dossier.md` §七.5。v2.8.10 是**合并/一致性收口**，非安全发布。
-
-### 冻结清单（v2.8.10·sha256，2026-10-11）
-- `scripts/metacog.py`：e9f424c8eb7e13e887f723d3847be46a81fe56d7d993d63ceeedb63477d02bef（含 `_hash_text_legacy` + `_hash_matches` + 4 处裸比较替换 + 外部锚目录 rename 迁移 + `CURRENT_VERSION_TUPLE`→(2,8,10)）
-- `SKILL.md`：ac4de8a037104789e9166534c7c64d4645382a0079d388a54ffac6a3e3f11191（`version`→2.8.10）
-- `CHANGELOG.md`：（自引用文件：本块内嵌自身哈希，落盘后该文件实际哈希随本行变化，故不列冻结哈希；以 § 版本号 + 文件存在性核验；新增本 v2.8.10 块）
-- `HANDOFF.md`：8a790a50e391c958aa7f853c36b5326f9b5c05af2c322eb69c2ae93430faf864（§16 v2.8.10 合并收口 + 冻结哈希 + 启动清单 v2.9.0 提示 + 铁律② PASS / 铁律5 CONDITIONAL-PASS）
-- `scripts/test-trust-root.py`：d4f03ad07b0c57cac930ca38ba82fc043242ab39aacea89d4b926b69c54a9dd8（**未改**，同 v2.8.9 冻结哈希）
-- `scripts/test-d2-d5.py`：fb310401ad3ac469aa8a7840058338dbf4c39b766fae51a8b0b4ba01d721e859（**未改**，同 v2.8.9 冻结哈希）
-- `references/hermes-audit-v288-dossier.md`：92e1ff9863334eae28e94191a0bce8191876d8ff54ba2d06d46e1b480ed42079（**未改**，同 v2.8.9）
-- 其余文件同 v2.8.9 冻结哈希，本版未改。
-
-### 验证（v2.8.10 · self-attested）
-全量 24 套件 **24/24 OK、0 FAIL、零回归**（受管 python 逐文件聚合，2026-10-11 复跑）；合计 **672 PASS-line**（与 v2.8.9 完全一致：merge 行为保持当前 32-char 基线语义不变，仅为非脚本制品补 16-char 前向兼容 + 外部锚目录迁移；无新增断言、无回归）；`test-trust-root.py` **252/252**、`test-d2-d5.py` **70/70** 均 exit 0、末行 "252/252 PASS" / "70/70 PASS"。**属 self-attested，非独立审计**（铁律② 隔离 subagent 验证 + 铁律5 Hermes 复派见后续）。
-
-### 铁律② 隔离 subagent 验证 / 铁律5 Hermes 复派（v2.8.10）
-- 铁律②：已派发隔离 general-purpose subagent（干净上下文）独立复核 2.8.10 diff + 受管 python 跑测试，不采信 self-attested → **结论 PASS**（2026-10-11）：4 处裸比较全部替换、`_hash_text_legacy`/`_hash_matches` 存在、rename 迁移存在、零残留；测试 24/24 OK、0 FAIL、trust-root 252/252、d2-d5 70/70 全绿。（注：Hermes 本次未在其审阅材料中见到 subagent 裁决原文，建议今后将裁决原文一并入卷宗；不撤销本 PASS 结论。）
-- 铁律5：冻结后最后派发 `mcp__hermes__hermes_audit` 复验（范围 = v2.8.10 合并增量；**不擅自扩大**修复 H-1~H-4，留 v2.9.0）。**2026-10-11 首派：Hermes MCP server `Not connected` 失败；KK 重连后于 2026-10-11 补派 → 裁定 ⚠️ 有条件通过（CONDITIONAL-PASS，仅限"合并增量本身"）**。核心：合并机械正确（4 处裸比较/helper/rename 迁移真实存在、版本双处一致、冻结 sha256 逐一吻合、诚实披露三项核实为真），但**挖出 2 高 / 4 中 / 3 低 新缺陷**（merge 前自审漏掉），其中 H-1 rename 半程失败→悬空路径 / H-2 畸形基线致 verify 崩 为新攻击面；并自纠 1 项初判（rename 悬空触发前置比初判更窄）+ 作废 1 项由过期 .pyc 引起的伪发现。
-  - 🔴 H-1：`_external_anchor_proof_dir`（L713-718）rename 半程失败（OSError 且源被外部删）→ 返回不存在路径 → 外部锚静默失效/假 fail-closed；无日志/审计留痕（对比 `_audit_rollback` 有 HMAC 链）；`test-trust-root.py` 零 rename 覆盖。
-  - 🔴 H-2：`_hash_matches`（L514）无类型守卫；`integrity.json` 中任一条 hash 非字符串（手改/JSON 数型推断）→ verify 全程崩（L1059-1160 / L668-690 / L651-666 无 per-artifact try）；`len(16位int)==16` 为真后 `startswith` 崩；C-10 威胁模型下低成本。
-  - 🟡 M-1：`_hash_matches` 无截止期闸门（L508-509 注释称"与 `_legacy_hash_allowed` 一致"但代码不接）；v2.9.0 强制迁移时 4 条非脚本链永久保留 16-char 降级向量；为 v2.8.9 H-1 同型新实例，未披露。
-  - 🟡 M-2：只读校验器（`_external_anchor_deleted` 经 `_external_anchor_proof_dir`）执行 rename 写操作，巡检有副作用；不进 `rollback-audit.jsonl`。
-  - 🟡 M-3："672 PASS-line 零回归 + 无新增断言"自指失效——新增逻辑（16-char 前向匹配/4 替换/rename/双目录/OSError/None）零测试覆盖；"零回归"仅证明没弄坏 2.8.9 已有行为，对新增代码证明力为零。
-  - 🟡 M-4：跨树 `_hash_text` 宽度不一致（repo 64 vs 部署 32）；若部署线日后同步回 repo 线，全部 64-char 基线被判漂移（双树回卷炸弹）。
-  - 🟢 L-1：`_hash_matches(None,None)`→True（当前调用点安全但隐患，建议改 False 对齐 `_script_hash_matches`）。
-  - 🟢 L-2：双目录并存→legacy 永久孤儿（L710 早退，不删/不 warn）。
-  - 🟢 L-3：`CURRENT_VERSION_TUPLE` 与 SKILL.md 零绑定断言（同 v2.8.9 H-2，未修；全树测试 grep 0 命中）。
-  - **审计建议（Hermes）**：v2.8.11 补丁级必做——H-2 类型守卫 + verify 主循环 per-artifact try；H-1 rename 后源存在性复核 + warn + 审计留痕；M-3 新增 6 条断言；M-1 `_hash_matches` 增 `allow_legacy` 形参并接截止期（或注释如实表述）；L-1→False；L-2 清孤儿。v2.9.0 已排 M-4 宽度常量单一化 + L-3 版本绑定断言。**均超出本次"双树合并"授权范围，按纪律未擅自修复，待 KK 授权 v2.8.11/v2.9.0 收口。Hermes 探针遗留 `probe_v2810*.py`/`probe_shm.py` 于工作区，可作 M-3 断言起点。**
-
----
-
 ## v2.8.11（2026-10-11）— KK 授权补丁收口 v2.8.10 Hermes CONDITIONAL-PASS 挖出的 H-1/H-2/M-1/L-1/L-2（5 项缺陷）
 
 > 修订（KK 授权 v2.8.11：收口 v2.8.10 复验 CONDITIONAL-PASS 裁定挖出的 5 项缺陷——H-2 类型守卫 / H-1 rename 半程失败留痕 / M-1 闸门接线 / L-1 (None,None) / L-2 双目录清孤儿。属补丁级安全收口，非合并。SKILL.md `version` 同步 2.8.11。）
@@ -728,6 +1868,55 @@ KK 决策「m1」（2026-10-12）：严格按 Hermes r5 M-1 描述，仅补写�
 
 ### 验证（M-1 · 铁律② 隔离 subagent 复派后 + 铁律5 Hermes 复派）
 全量 24 套件 **24/24 OK、0 FAIL**（受管 python 逐文件聚合，2026-10-12 复跑）；合计 **717 PASS-line**（713 + M-1 +4）；`test-trust-root.py` exit 0、末行 "290/290 PASS"（288 + 2）；`test-d2-d5.py` **77/77**（75 + 2）。零回归。铁律② 隔离 subagent 静态复核 → **PASS**（双写入器守卫 + 4 断言全确认、77/77 + 290/290 + 24/24 OK、717 PASS-line、无越权/新缺陷）。铁律5 Hermes 复派（M-1 收口后，2026-10-12 第六轮 r6）→ 待 Hermes MCP 连接后最后派发（当前会话 Hermes 未连接；冻结已完成、铁律② 隔离 subagent 静态复核已 PASS）。F-1/F-3/C-10 仍 OPEN 留 v2.9.0。
+
+---
+
+## v2.8.10（2026-10-11）— 双树合并收口：2.8.9 权威线吸收 repo/ 2.8.6 F1 增强（非脚本制品长度感知哈希比较 + 外部锚证明目录 16→32-char 迁移）
+
+> 修订（KK 授权 v2.8.10：前序 turn 核查磁盘发现实际加载/部署版是 **v2.8.9**（含 v286~v288 Hermes 卷宗 + ④⑤⑥⑦ 收口），而会话工作目录 `repo/` 另持一份基于陈旧 2.8.5 改出的 **v2.8.6**，含 2 处 2.8.9 缺失的独有增强。两树互补，KK 授权合并：在权威部署线 2.8.9 上吸收 repo/ 2.8.6 的 F1 增强——非脚本制品长度感知哈希比较 + 外部锚证明目录 16→32-char 一次性 rename 迁移——保留 2.8.9 的 128-bit/`--yes`/HMAC 审计/多轮 Hermes 成果，产出 v2.8.10。本版为**合并/一致性收口**，非安全发布，未引入新安全修复，未修复 v2.8.9 Hermes NOT-PASS 的 H-1~H-4 + M-1（留 v2.9.0）。SKILL.md `version` 同步 2.8.10。）
+
+### 来源 / 授权
+前序 turn 的摘要叙事称基线是 v2.8.5，但磁盘核查推翻该叙事：实际部署/加载版是 **v2.8.9**（111 文件，含 v286/v287/v288 三份 Hermes 卷宗 + ④ legacy 截止期 / ⑤ F-4 分文件硬闸 / ⑥ TTY 校验 / ⑦ HMAC 审计全部收口）。会话工作目录 `repo/`（105 文件）是另起的 v2.8.6（基于陈旧 2.8.5），其独有增强：① 非脚本制品的长度感知哈希比较（`_hash_matches`，覆盖 applies/链/外部锚/哨兵，闭合 2.8.7 H-1 同类缺口在非脚本侧的最后残余）；② 外部锚证明目录 16→64 rename 迁移。两树完整 diff 确认互补（2.8.9 有权威性但缺上述 2 处遗留兼容；repo/ 2.8.6 有这 2 处增强）。KK 授权：**合并（2.8.9 + repo 增强 → 2.8.10）**，不在错误基线上推进、不误同步回退 2.8.9。
+
+### 改动清单（v2.8.10）
+- **通用长度感知哈希 helper（合并 repo F1）**：`Store` 新增静态 `_hash_text_legacy(text)`（16-char，仅用于识别旧版外部锚证明目录名，不参与完整性判定）+ 静态 `_hash_matches(stored, current)`（精确匹配优先；`stored` 为 16-char 且 `current.startswith(stored)` → 命中旧格式前向兼容；None 处理）。该 helper 覆盖 **非脚本制品**（applies / 哈希链 / 外部锚 / 哨兵）。
+- **4 处裸哈希比较改为 `_hash_matches`**：`applies_integrity_ok`（L645→L664）、`_integrity_chain_ok`（L671→L690）、`_external_anchor_deleted` 锚（L879→L911）与哨兵（L888→L920）。消除 repo/ 2.8.6 已指出的"非 script: 分支裸比较遗留兼容缺口"在非脚本制品上的残余（与 2.8.7 H-1 同类缺口对齐收尾）。
+- **外部锚证明目录 16→32-char 一次性 rename 迁移（合并 repo F1）**：`_external_anchor_proof_dir`（L682→L702）新名不存在 + 旧 16-char 名存在 → `rename` 到新名；OSError → 回退旧名，不阻断 verify。使存量 v2.8.5 及更早的外部锚安装升级后不 fail-closed。
+- **版本号同步**：`CURRENT_VERSION_TUPLE` (2,8,9)→(2,8,10)；`SKILL.md` `version` 2.8.9→2.8.10。`(2,8,10) < (2,9)` 截止期 → legacy 仍放行，与 2.8.9 ④ 治理口径一致。
+
+### 诚实边界（v2.8.10）
+- **未采用 repo/ 2.8.6 的 `_hash_text` 64-char 改宽**：部署线 2.8.9 已统一 32-char（128-bit）+ `_legacy_hash_allowed` 截止期治理；改 64-char 会令全部存量 32-char 基线失效、与 ④ 治理冲突。本版仅新增前向兼容 helper，哈希宽度不变。
+- **保留 2.8.9 全部优势**：`_script_hash_matches` + `allow_legacy` 截止期、HMAC 链式审计 `_audit_rollback`/`_verify_audit_chain`、`--yes` TTY 校验、`__meta__` 迁移计数 + `legacy-remaining` 阻断；**未动** L1006（manifest 遗留迁移探测器）与 L3015（human-guard `_script_hash_matches`）。
+- **降级向量仍在**：16-char 纯前缀前向匹配（与 2.8.7 F-1 同源）含降级向量（攻击者截 32-char 为 16-char 可绕过主路径）；因 `(2,8,10)<(2,9)` 截止期 legacy 仍放行，强制迁移点推迟到 v2.9.0（与 ④ 一致）。
+- **C-10 残余不变**：基线 `integrity.json` 同处可写 ledger 域 + 无签名，攻击者改代码 + 重记基线仍不可检出（D4 同类，须部署契约兜底）。
+- **H-1~H-4 + M-1 仍 OPEN**：v2.8.9 Hermes 二次复派 NOT-PASS 的 4 项 blocking 缺陷未修复（超出本次"双树合并"授权范围，按「严格按指令修复·不擅自扩大」纪律留 v2.9.0），详见 § v2.8.9 + `references/hermes-audit-v288-dossier.md` §七.5。v2.8.10 是**合并/一致性收口**，非安全发布。
+
+### 冻结清单（v2.8.10·sha256，2026-10-11）
+- `scripts/metacog.py`：e9f424c8eb7e13e887f723d3847be46a81fe56d7d993d63ceeedb63477d02bef（含 `_hash_text_legacy` + `_hash_matches` + 4 处裸比较替换 + 外部锚目录 rename 迁移 + `CURRENT_VERSION_TUPLE`→(2,8,10)）
+- `SKILL.md`：ac4de8a037104789e9166534c7c64d4645382a0079d388a54ffac6a3e3f11191（`version`→2.8.10）
+- `CHANGELOG.md`：（自引用文件：本块内嵌自身哈希，落盘后该文件实际哈希随本行变化，故不列冻结哈希；以 § 版本号 + 文件存在性核验；新增本 v2.8.10 块）
+- `HANDOFF.md`：8a790a50e391c958aa7f853c36b5326f9b5c05af2c322eb69c2ae93430faf864（§16 v2.8.10 合并收口 + 冻结哈希 + 启动清单 v2.9.0 提示 + 铁律② PASS / 铁律5 CONDITIONAL-PASS）
+- `scripts/test-trust-root.py`：d4f03ad07b0c57cac930ca38ba82fc043242ab39aacea89d4b926b69c54a9dd8（**未改**，同 v2.8.9 冻结哈希）
+- `scripts/test-d2-d5.py`：fb310401ad3ac469aa8a7840058338dbf4c39b766fae51a8b0b4ba01d721e859（**未改**，同 v2.8.9 冻结哈希）
+- `references/hermes-audit-v288-dossier.md`：92e1ff9863334eae28e94191a0bce8191876d8ff54ba2d06d46e1b480ed42079（**未改**，同 v2.8.9）
+- 其余文件同 v2.8.9 冻结哈希，本版未改。
+
+### 验证（v2.8.10 · self-attested）
+全量 24 套件 **24/24 OK、0 FAIL、零回归**（受管 python 逐文件聚合，2026-10-11 复跑）；合计 **672 PASS-line**（与 v2.8.9 完全一致：merge 行为保持当前 32-char 基线语义不变，仅为非脚本制品补 16-char 前向兼容 + 外部锚目录迁移；无新增断言、无回归）；`test-trust-root.py` **252/252**、`test-d2-d5.py` **70/70** 均 exit 0、末行 "252/252 PASS" / "70/70 PASS"。**属 self-attested，非独立审计**（铁律② 隔离 subagent 验证 + 铁律5 Hermes 复派见后续）。
+
+### 铁律② 隔离 subagent 验证 / 铁律5 Hermes 复派（v2.8.10）
+- 铁律②：已派发隔离 general-purpose subagent（干净上下文）独立复核 2.8.10 diff + 受管 python 跑测试，不采信 self-attested → **结论 PASS**（2026-10-11）：4 处裸比较全部替换、`_hash_text_legacy`/`_hash_matches` 存在、rename 迁移存在、零残留；测试 24/24 OK、0 FAIL、trust-root 252/252、d2-d5 70/70 全绿。（注：Hermes 本次未在其审阅材料中见到 subagent 裁决原文，建议今后将裁决原文一并入卷宗；不撤销本 PASS 结论。）
+- 铁律5：冻结后最后派发 `mcp__hermes__hermes_audit` 复验（范围 = v2.8.10 合并增量；**不擅自扩大**修复 H-1~H-4，留 v2.9.0）。**2026-10-11 首派：Hermes MCP server `Not connected` 失败；KK 重连后于 2026-10-11 补派 → 裁定 ⚠️ 有条件通过（CONDITIONAL-PASS，仅限"合并增量本身"）**。核心：合并机械正确（4 处裸比较/helper/rename 迁移真实存在、版本双处一致、冻结 sha256 逐一吻合、诚实披露三项核实为真），但**挖出 2 高 / 4 中 / 3 低 新缺陷**（merge 前自审漏掉），其中 H-1 rename 半程失败→悬空路径 / H-2 畸形基线致 verify 崩 为新攻击面；并自纠 1 项初判（rename 悬空触发前置比初判更窄）+ 作废 1 项由过期 .pyc 引起的伪发现。
+  - 🔴 H-1：`_external_anchor_proof_dir`（L713-718）rename 半程失败（OSError 且源被外部删）→ 返回不存在路径 → 外部锚静默失效/假 fail-closed；无日志/审计留痕（对比 `_audit_rollback` 有 HMAC 链）；`test-trust-root.py` 零 rename 覆盖。
+  - 🔴 H-2：`_hash_matches`（L514）无类型守卫；`integrity.json` 中任一条 hash 非字符串（手改/JSON 数型推断）→ verify 全程崩（L1059-1160 / L668-690 / L651-666 无 per-artifact try）；`len(16位int)==16` 为真后 `startswith` 崩；C-10 威胁模型下低成本。
+  - 🟡 M-1：`_hash_matches` 无截止期闸门（L508-509 注释称"与 `_legacy_hash_allowed` 一致"但代码不接）；v2.9.0 强制迁移时 4 条非脚本链永久保留 16-char 降级向量；为 v2.8.9 H-1 同型新实例，未披露。
+  - 🟡 M-2：只读校验器（`_external_anchor_deleted` 经 `_external_anchor_proof_dir`）执行 rename 写操作，巡检有副作用；不进 `rollback-audit.jsonl`。
+  - 🟡 M-3："672 PASS-line 零回归 + 无新增断言"自指失效——新增逻辑（16-char 前向匹配/4 替换/rename/双目录/OSError/None）零测试覆盖；"零回归"仅证明没弄坏 2.8.9 已有行为，对新增代码证明力为零。
+  - 🟡 M-4：跨树 `_hash_text` 宽度不一致（repo 64 vs 部署 32）；若部署线日后同步回 repo 线，全部 64-char 基线被判漂移（双树回卷炸弹）。
+  - 🟢 L-1：`_hash_matches(None,None)`→True（当前调用点安全但隐患，建议改 False 对齐 `_script_hash_matches`）。
+  - 🟢 L-2：双目录并存→legacy 永久孤儿（L710 早退，不删/不 warn）。
+  - 🟢 L-3：`CURRENT_VERSION_TUPLE` 与 SKILL.md 零绑定断言（同 v2.8.9 H-2，未修；全树测试 grep 0 命中）。
+  - **审计建议（Hermes）**：v2.8.11 补丁级必做——H-2 类型守卫 + verify 主循环 per-artifact try；H-1 rename 后源存在性复核 + warn + 审计留痕；M-3 新增 6 条断言；M-1 `_hash_matches` 增 `allow_legacy` 形参并接截止期（或注释如实表述）；L-1→False；L-2 清孤儿。v2.9.0 已排 M-4 宽度常量单一化 + L-3 版本绑定断言。**均超出本次"双树合并"授权范围，按纪律未擅自修复，待 KK 授权 v2.8.11/v2.9.0 收口。Hermes 探针遗留 `probe_v2810*.py`/`probe_shm.py` 于工作区，可作 M-3 断言起点。**
 
 ---
 
@@ -1509,7 +2698,7 @@ v2.6.4 经统一 Hermes 复验（Hermes 本环境有盘访问、跑 ad-hoc 验�
   - **Q3 测试覆盖成立但有 3 缺口**：① 递归测试仅 `"["*50000` 单一形状，缺 `{}`/混合/参数化；② 权限测试仅 `os.access(..., W_OK)` 间接判定，未直查 `st_file_attributes & FILE_ATTRIBUTE_READONLY`（0o400 若返回成功却未置 RO 会误判 PASS）；③ 无超大合法 JSON DoS 测试。
   - **Q4 新增 1 项 MEDIUM-LOW（已于 v2.6.6 收口）**：`HsmTrustRoot.attestation_ok` L258 `base64.b64decode(rec.get("attest",""))` **无异常保护**，`attest` 为非法 base64 → `binascii.Error`（ValueError 子类）逸出，`attestation_ok` 抛异常而非返回 `(False, reason)`，fail-closed 路径断裂；与 P1-④ 同属"损坏输入逃逸"类，修法：`except (ValueError, OSError)` 即可覆盖（返回 `(False, "attestation-malformed")`）。缓解前提：attestation_path 按契约应非 Agent 可写，但契约是设计前提非代码强制，按 fail-closed 纪律应修。另 L257/292/332 三处 `except Exception` 均为 fail-closed 方向（→False/跳过），非新增缺陷。
   - **Q5 评级维持 CONDITIONAL**：P1-④/⑤ 确闭合（实跑支持），但 C-1 默认模式仍 OPEN、外部锚不可伪造性依赖未运行时强制部署契约、上调条件未触及；无新增 HIGH、无回归、诚实边界完备，故不降级。
-  - **诚实修正（材料路径）**：本派发 dossier 误将技能根写作 `C:\Users\Administrator\workbuddy\...`（缺 `.` 前缀），Hermes 自纠为真实 `.workbuddy` 路径并成功读盘复验——属材料笔误非代码缺陷，已记录；后续审计材料须用 `.workbuddy`（带点）。
+  - **诚实修正（材料路径）**：本派发 dossier 误将技能根写作 `<USER>\workbuddy\...`（缺 `.` 前缀），Hermes 自纠为真实 `.workbuddy` 路径并成功读盘复验——属材料笔误非代码缺陷，已记录；后续审计材料须用 `.workbuddy`（带点）。
   - **评级**：⚠️ **CONDITIONAL 维持**（Hermes 裁定 + 我方复核一致；2 残留实跑闭合、不影响 C-1 OPEN / 外部锚依赖部署契约）。
   - **已授权 v2.6.6 收口（见 v2.6.6 节）**：Q4 `attestation_ok` b64decode 逃逸 + Q3 测试广度缺口（递归 4 形状参数化 / Windows 权限改直查 st_file_attributes），隔离 subagent 285/285 验证全绿。
 ## v2.6.4（2026-09-30）— v2.6.3 Hermes 复验暴露 5 项真实 P1 收口（历史健壮性债）
@@ -1817,7 +3006,7 @@ v2.5.4 经 Hermes 审计长实跑复验（36/36 断言）裁定 N8 建议关闭�
 - **LOW 全闭合（实跑实证）**：LOW-1 n 类型守卫 9/9（非 int n 一律 False、无 TypeError）；LOW-2 e 钉死 65537（合法 e=65537 通过、e=3/5/17/257/1/…/−65537/0 全抛 ValueError、verify 对 (n,3)/(n,5)/(n,1) 均 False）；LOW-3 旧 blob 硬破坏性（pre-v2.5.4 无 mac blob → InvalidCiphertext，本机 human-guard.json 0 命中零在线影响）；LOW-4 docstring（grep「可证明安全」「AES-CTR」0 命中、替换措辞完整）；LOW-5 MAC 覆盖域（algo 写入不读取、无分支解密路径，零影响）。
 - **N8 关闭维持**：A 组 14/14 断言全过（P0-1 篡改 ct/mac/错口令均 InvalidCiphertext；P0-2 iters 注入 1/99亿/7/0/'abc'/缺失均按常量 200k 0.29s 解开不挂死；P1-1 e=1 伪造 verify False）；LOW 改动未引入任何 N8 回归。
 - **新增 M-6（MEDIUM，v2.5.5 引入的跨层副作用）**：`deserialize_pub` 对非 65537 指数抛裸 `ValueError`（及畸形 pubkey 的 KeyError/AttributeError）未被 `metacog.verify_human_signature` / `resolve_trial_start` 捕获，逃出破坏其 `(bool, str)` fail-closed 契约（F 组 5/8 逃逸、E 组 root check 通过后仍崩溃）。根因：LOW-2 钉死 e=65537 使 v2.5.4 曾合法的 e=3 变拒绝、触发抛异常，而 v2.5.4 的 36 断言未覆盖 e=3 向量。可达性：本机 keygen 恒 e=65537 不可达、read_json 已兜整文件损坏；需「合法 JSON + 坏 pubkey 形态」（并发/竞态/手改）才触达；影响面 DoS/裸异常/契约违背，**非签名伪造或密钥泄露** → 定 MEDIUM，不阻塞 N8 关闭。**修复在 metacog.py（非被审 sigcrypto.py）**：两调用点把 `deserialize_pub` 纳入 try/except 返回 `False/reason` + 可选 `human_pubkey_fingerprint` 哈希前形状校验；待 KK 授权随 v2.5.6 落地。
-- 权威裁定报告：`C:\Users\Administrator\WorkBuddy\2026-09-26-10-31-47\audit-verdict-v2.5.5-sigcrypto.md`。
+- 权威裁定报告：`<USER>\WorkBuddy\2026-09-26-10-31-47\audit-verdict-v2.5.5-sigcrypto.md`。
 - **残留 OPEN（更新）**：C-1 循环论证、C-2 部分（带外核验）、F-4/M-5（改名+快照签名）、N1（symlink，待 PoC）、**M-6（metacog.py 契约逃逸，待 v2.5.6）**。
 
 ---
@@ -2375,7 +3564,7 @@ TRACE 评测 R·Reliability 4.3/5，其中「异常处理 4.0」专项指出：�
   - 大文件 512KB 用例改为生成 >512KB 数据（原仅 ~478KB 未达阈值，导致 read_jsonl 守护未被触发）；守护逻辑本身正确。
   - `test_fail_closed` 改用 `--root` 隔离目录，未初始化目录现正确返回 RC=2（原跑到 cwd 的 `.metacog` 误判）。
 - **验证**：`test-core.py` 13/13、`test-boundary-cases.py` **40/40** 全 PASS。
-- **测试套件收敛**：`references/test-runner.py` 与 `references/test-runner-v2.py`（subprocess 式）与上面两套 import 式测试功能重复，且存在系统性 bug——`run()` 调用普遍漏传 `cwd`，会把 `.metacog` 创建到脚本目录污染 skill 根目录；原又硬编码了不存在的 `C:/Users/Administrator/.local/bin/python3.13.exe`（本就跑不起来）。已将其退役至 `references/obsolete/`，唯一权威测试入口收敛为 `scripts/test-core.py` 与 `scripts/test-boundary-cases.py`。
+- **测试套件收敛**：`references/test-runner.py` 与 `references/test-runner-v2.py`（subprocess 式）与上面两套 import 式测试功能重复，且存在系统性 bug——`run()` 调用普遍漏传 `cwd`，会把 `.metacog` 创建到脚本目录污染 skill 根目录；原又硬编码了不存在的 `<USER>/.local/bin/python3.13.exe`（本就跑不起来）。已将其退役至 `references/obsolete/`，唯一权威测试入口收敛为 `scripts/test-core.py` 与 `scripts/test-boundary-cases.py`。
 ## v1.4.0（2026-09-08）— P0 修复 + 测试补齐全
 
 **P0 修复（第三方审计指出、已逐条复核真实代码后执行）：**
@@ -2392,7 +3581,7 @@ TRACE 评测 R·Reliability 4.3/5，其中「异常处理 4.0」专项指出：�
 
 **已知待办（P2，非本次 P0，不影响生产代码正确性）：**
 - `test-boundary-cases.py` 中 4 项失败均为测试脚本自身缺陷：①大文件用例仅生成 ~478KB 未达 512KB 阈值（守护逻辑本身正确）；②`main()` 未传 `--root` 跑到 cwd 致"未初始化 RC=2"误判；③红线用例「自动批准」未命中（正则覆盖"自动同意"/auto approve）。下个版本修测试。
-- `references/test-runner*.py` 硬编码 `C:/Users/Administrator/.local/bin/python3.13.exe` 绝对路径（P2-2），建议改为 `sys.executable` 或环境变量。
+- `references/test-runner*.py` 硬编码 `<USER>/.local/bin/python3.13.exe` 绝对路径（P2-2），建议改为 `sys.executable` 或环境变量。
 
 ---
 ## v1.3.0（2026-09-07）

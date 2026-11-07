@@ -44,6 +44,8 @@ except (AttributeError, ValueError):
     pass
 
 sys.path.insert(0, str(Path(__file__).parent))
+# v2.27.19（N-3）：冻结链密钥 env-only（C-01 同源）——standalone 运行自带测试密钥
+os.environ.setdefault("METACOG_TRUST_ROOT_ANCHOR_KEY", "bWV0YWNvZy10ZXN0LWFuY2hvci1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMTIzNDU2Nzg5")
 import freeze as freeze_mod
 
 _TMP = Path(tempfile.mkdtemp(prefix="metacog_hb_"))
@@ -132,10 +134,13 @@ def test_hb2_anchor_missing_failclosed():
     ok, viol = freeze_mod.verify()
     r.add("删锚后 verify fail-closed（H-B2 收口）", ok is False)
     r.add("检出 FROZEN-ANCHOR: 锚未初始化", any("FROZEN-ANCHOR: 锚未初始化" in v for v in viol), "viol={}".format(viol))
-    # 合法恢复：显式 anchor-init 重建信任根（v2.14.0 P1-3：需 METACOG_ANCHOR_INIT_TOKEN 授权）
-    os.environ["METACOG_ANCHOR_INIT_TOKEN"] = freeze_mod._ANCHOR_INIT_TOKEN
+    # 合法恢复：显式 anchor-init 重建信任根（v2.14.0 P1-3 授权；v2.27.17 M-03：双 env 成对一致）
+    os.environ["METACOG_ANCHOR_INIT_TOKEN"] = "metacog-test-init-token"
+    os.environ["METACOG_ANCHOR_INIT_TOKEN_EXPECTED"] = "metacog-test-init-token"
     rc = freeze_mod.anchor_init()
     r.add("anchor-init 成功（rc=0）", rc == 0, "rc={}".format(rc))
+    os.environ.pop("METACOG_ANCHOR_INIT_TOKEN", None)
+    os.environ.pop("METACOG_ANCHOR_INIT_TOKEN_EXPECTED", None)
     r.add("anchor-init 成功（rc=0）", rc == 0, "rc={}".format(rc))
     r.add("anchor-init 后锚文件重建", _ANCHOR.exists())
     ok2, viol2 = freeze_mod.verify()
@@ -202,13 +207,15 @@ def test_reset_blocked_double_delete():
     r.add("双删后 record 被拒（FROZEN-RESET-BLOCKED, rc<0）", rc < 0, "rc={}".format(rc))
     ok, viol = freeze_mod.verify()
     r.add("双删态 verify fail-closed（账本缺失）", ok is False)
-    # 显式授权重置应放行（r13 H-3 收口：ALLOW_RESET=1 必须与正确 RESET_TOKEN 配对，裸 env 不再放行）
+    # 显式授权重置应放行（r13 H-3 收口：ALLOW_RESET=1 必须与令牌配对；v2.27.17 M-03：双 env 成对一致）
     os.environ["METACOG_FREEZE_ALLOW_RESET"] = "1"
-    os.environ["METACOG_FREEZE_RESET_TOKEN"] = freeze_mod._RESET_TOKEN
+    os.environ["METACOG_FREEZE_RESET_TOKEN"] = "metacog-test-reset-token"
+    os.environ["METACOG_FREEZE_RESET_TOKEN_EXPECTED"] = "metacog-test-reset-token"
     rc2 = freeze_mod.record(["frozen_sample.py"])
-    r.add("带 METACOG_FREEZE_ALLOW_RESET=1 + 正确 RESET_TOKEN 可授权重置（rc>=0）", rc2 >= 0, "rc={}".format(rc2))
+    r.add("带 METACOG_FREEZE_ALLOW_RESET=1 + 成对一致 RESET_TOKEN 可授权重置（rc>=0）", rc2 >= 0, "rc={}".format(rc2))
     del os.environ["METACOG_FREEZE_ALLOW_RESET"]
     del os.environ["METACOG_FREEZE_RESET_TOKEN"]
+    del os.environ["METACOG_FREEZE_RESET_TOKEN_EXPECTED"]
     return r
 
 
@@ -226,8 +233,9 @@ def test_anchor_init_launder_refused():
     e["hmac"] = "0" * 64
     lines[0] = json.dumps(e, separators=(",", ":"), sort_keys=True)
     freeze_mod.FREEZE_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    # 不带令牌跑 anchor-init（应默认拒绝）
+    # 不带令牌跑 anchor-init（应默认拒绝；M-03 后：缺提供值或缺期望值均拒绝）
     os.environ.pop("METACOG_ANCHOR_INIT_TOKEN", None)
+    os.environ.pop("METACOG_ANCHOR_INIT_TOKEN_EXPECTED", None)
     rc = freeze_mod.anchor_init()
     r.add("无令牌 anchor-init 被拒绝（rc==2, P1-3 收口）", rc == 2, "rc={}".format(rc))
     ok, viol = freeze_mod.verify()
@@ -280,16 +288,20 @@ def test_l1_at_iso_format():
 
 
 def test_p13_token_init_succeeds():
-    """v2.15.0 M-2 诚实呈现：持令牌 + 结构合法 ledger，anchor_init 成功（rc=0）。
-    证明令牌是防御纵深（非密码学根）——已知令牌值的同用户可调用，此为本设计预期行为（residual ②）。"""
+    """v2.15.0 M-2 诚实呈现：持成对令牌 + 结构合法 ledger，anchor_init 成功（rc=0）。
+    v2.27.17（M-03）：令牌不再存于代码字面量，测试自带测试用令牌对（提供值/期望值一致）；
+    令牌门为防御纵深（非密码学根）——持有成对 env 配置权的部署方可调用，此为本设计预期行为（residual ②）。"""
     r = T()
     _clean_state()
     f = _TMP / "frozen_sample.py"
     _write(f, "original content\n")
     freeze_mod.record(["frozen_sample.py"])
-    os.environ["METACOG_ANCHOR_INIT_TOKEN"] = freeze_mod._ANCHOR_INIT_TOKEN
+    os.environ["METACOG_ANCHOR_INIT_TOKEN"] = "metacog-test-init-token"
+    os.environ["METACOG_ANCHOR_INIT_TOKEN_EXPECTED"] = "metacog-test-init-token"
     rc = freeze_mod.anchor_init()
-    r.add("持令牌 + 合法 ledger：anchor_init 成功（rc==0，令牌非密码学根）", rc == 0, "rc={}".format(rc))
+    r.add("持成对令牌 + 合法 ledger：anchor_init 成功（rc==0，令牌非密码学根）", rc == 0, "rc={}".format(rc))
+    os.environ.pop("METACOG_ANCHOR_INIT_TOKEN", None)
+    os.environ.pop("METACOG_ANCHOR_INIT_TOKEN_EXPECTED", None)
     ok, _ = freeze_mod.verify()
     r.add("anchor_init 后 verify 通过", ok)
     return r
